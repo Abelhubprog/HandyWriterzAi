@@ -1,8 +1,8 @@
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any
 from github import Github, GithubException
-from agent.base import BaseNode
-from agent.handywriterz_state import HandyWriterzState
+from src.agent.base import BaseNode
+from ...agent.handywriterz_state import HandyWriterzState
 
 class GitHubSearchAgent(BaseNode):
     """An agent that searches for GitHub repositories."""

@@ -1,0 +1,82 @@
+# Core LangChain and LangGraph
+langchain
+langgraph
+langchain-google-genai
+langgraph-cli[inmem]
+langgraph-api
+
+# FastAPI and Web Framework
+fastapi
+uvicorn[standard]
+websockets
+python-multipart
+starlette-compress
+
+# LLM Providers
+google-genai
+anthropic
+openai
+langchain-openai
+langchain-groq
+google-cloud-aiplatform
+
+# Database and Storage
+sqlalchemy
+alembic
+asyncpg
+psycopg2-binary
+supabase
+chromadb
+
+# Redis and Caching
+redis
+aioredis
+
+# Data Processing and Utils
+python-dotenv
+pydantic
+aiohttp
+python-jose[cryptography]
+passlib[bcrypt]
+PyJWT
+
+# File Processing
+agentic-doc
+PyPDF2
+docx2txt
+python-docx
+openpyxl
+Pillow
+fpdf
+
+# Research and Analysis
+pytrends
+arxiv
+beautifulsoup4
+requests
+feedparser
+
+# Background Jobs
+celery[redis]
+
+# Cloud Storage
+boto3
+azure-storage-blob
+
+# Monitoring and Logging
+prometheus-client
+structlog
+opentelemetry-api
+opentelemetry-sdk
+
+# Security
+cryptography
+bcrypt
+
+# Development Tools
+mypy
+ruff
+pytest
+pytest-asyncio
+httpx
+sentence-transformers

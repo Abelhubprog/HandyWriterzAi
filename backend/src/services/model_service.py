@@ -118,3 +118,7 @@ class ModelService:
 
 # Singleton instance
 model_service = ModelService()
+
+def get_model_service() -> ModelService:
+    """Get the singleton model service instance."""
+    return model_service

@@ -3,7 +3,6 @@ Telegram gateway for automated Turnitin processing.
 """
 
 import asyncio
-import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,7 +11,6 @@ import uuid
 
 from telethon import TelegramClient, events
 from telethon.tl.types import DocumentAttributeFilename
-from sqlalchemy.orm import Session
 
 from ..db.database import get_db_session
 from ..models.turnitin import DocChunk, Submission, ChunkStatus

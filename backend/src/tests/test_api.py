@@ -1,7 +1,6 @@
 import pytest
 from httpx import AsyncClient
 from backend.src.main import app
-from backend.src.api.schemas.chat import ChatRequest
 
 @pytest.mark.asyncio
 async def test_chat_validation():

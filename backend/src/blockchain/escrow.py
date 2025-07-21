@@ -6,12 +6,10 @@ import logging
 from decimal import Decimal
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
-import json
 
 from web3 import Web3
 from eth_account import Account
 from eth_account.messages import encode_defunct
-from sqlalchemy.orm import Session
 
 from ..models.turnitin import WalletEscrow, CheckerPayout, DocLot, PayoutStatus
 from ..db.database import get_db_session

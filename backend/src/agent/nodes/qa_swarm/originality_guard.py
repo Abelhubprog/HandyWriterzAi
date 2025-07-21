@@ -5,13 +5,13 @@ This micro-agent ensures the originality of the generated content and
 protects against plagiarism by comparing it against online sources.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
-from agent.base import BaseNode, NodeError
-from agent.handywriterz_state import HandyWriterzState
-from tools.google_web_search import google_web_search
+from src.agent.base import BaseNode
+from ...handywriterz_state import HandyWriterzState
+from src.tools.google_web_search import google_web_search
 
 class OriginalityGuardAgent(BaseNode):
     """

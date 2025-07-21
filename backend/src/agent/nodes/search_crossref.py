@@ -1,53 +1,75 @@
-
-import httpx
+from typing import Dict, Any, List, Optional
 from urllib.parse import quote
-from typing import Any
-from agent.nodes.search_base import BaseSearchNode
+import httpx
+
+from .search_base import BaseSearchNode, SearchResult
+from ..handywriterz_state import HandyWriterzState
 
 class SearchCrossRef(BaseSearchNode):
+    """
+    A search node that queries the CrossRef API for academic publications.
+    """
+
     def __init__(self):
-        super().__init__(api_url="https://api.crossref.org/works")
+        super().__init__(
+            name="SearchCrossRef",
+            api_key=None,  # CrossRef API is public
+            max_results=20,
+            rate_limit_delay=0.5  # Be polite to the public API
+        )
 
-    def build_query(self, params: dict) -> str:
-        query_parts = []
-        if "topic" in params:
-            query_parts.append(f"query.bibliographic={quote(params['topic'])}")
-        if "year_from" in params:
-            query_parts.append(f"filter=from-pub-date:{params['year_from']}-01-01")
-        return f"{self.api_url}?{'&'.join(query_parts)}&rows=20"
+    async def _optimize_query_for_provider(self, query: str, state: HandyWriterzState) -> str:
+        """
+        Optimizes the search query for the CrossRef API.
+        """
+        # CrossRef works well with bibliographic queries
+        return f"https://api.crossref.org/works?query.bibliographic={quote(query)}&rows={self.max_results}&sort=relevance"
 
-    async def execute(self, state: dict, config: Any) -> dict:
-        params = state.get("params", {})
-        query = self.build_query(params)
-        results = await self._perform_search(query)
-        state["raw_hits"] = state.get("raw_hits", []) + results
-        return state
-
-    async def _perform_search(self, query: str) -> list[dict]:
+    async def _perform_search(self, query: str, state: HandyWriterzState) -> List[Dict[str, Any]]:
+        """
+        Performs the actual search operation using the CrossRef API.
+        """
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(query, timeout=10)
-                response.raise_for_status()
+            response = await self.client.get(query)
+            response.raise_for_status()
             data = response.json()
-            return self.normalize(data.get("message", {}).get("items", []))
+            return data.get("message", {}).get("items", [])
         except httpx.HTTPStatusError as e:
-            print(f"HTTP error occurred: {e}")
+            self.logger.error(f"HTTP error occurred during CrossRef search: {e}")
             return []
         except Exception as e:
-            print(f"An error occurred: {e}")
+            self.logger.error(f"An error occurred during CrossRef search: {e}")
             return []
 
-    def normalize(self, items: list[dict]) -> list[dict]:
-        normalized = []
-        for item in items:
-            authors = [f"{author.get('given', '')} {author.get('family', '')}".strip() for author in item.get("author", [])]
-            normalized.append({
-                "id": item.get("DOI"),
-                "title": item.get("title", [None])[0],
-                "authors": ", ".join(authors),
-                "year": item.get("published-print", {}).get("date-parts", [[None]])[0][0] or item.get("created", {}).get("date-parts", [[None]])[0][0],
-                "journal": item.get("container-title", [None])[0],
-                "doi": item.get("DOI"),
-                "url": item.get("URL")
-            })
-        return normalized
+    async def _convert_to_search_result(self, raw_result: Dict[str, Any], state: HandyWriterzState) -> Optional[SearchResult]:
+        """
+        Converts a raw result from the CrossRef API into a standardized SearchResult object.
+        """
+        try:
+            title = raw_result.get("title", [None])[0]
+            if not title:
+                return None
+
+            authors = [f"{author.get('given', '')} {author.get('family', '')}".strip() for author in raw_result.get("author", [])]
+            
+            # Extract publication date
+            pub_date_parts = raw_result.get("published-print", {}).get("date-parts", [[]])[0]
+            if not pub_date_parts:
+                 pub_date_parts = raw_result.get("created", {}).get("date-parts", [[]])[0]
+            
+            publication_date = "-".join(map(str, pub_date_parts)) if pub_date_parts else None
+
+            return SearchResult(
+                title=title,
+                authors=authors,
+                abstract=raw_result.get("abstract", ""),
+                url=raw_result.get("URL"),
+                publication_date=publication_date,
+                doi=raw_result.get("DOI"),
+                citation_count=raw_result.get("is-referenced-by-count", 0),
+                source_type="journal",  # CrossRef primarily has journal articles
+                raw_data=raw_result
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to convert CrossRef result: {e}")
+            return None

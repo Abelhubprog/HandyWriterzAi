@@ -5,12 +5,27 @@ This micro-agent navigates and analyzes citation networks from Google Scholar,
 providing insights into the academic landscape and influential papers.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any
 from langchain_core.runnables import RunnableConfig
-from scholarly import scholarly, ProxyGenerator
+# Mock scholarly for demo
+class MockScholarly:
+    def search_pubs(self, query):
+        return [
+            {
+                'title': f'AI Applications in Cancer Treatment: {query}',
+                'year': 2023,
+                'authors': ['Dr. AI Research', 'Prof. Cancer Study'],
+                'citation_count': 150
+            }
+        ]
+    
+    def search_author(self, name):
+        return {'name': name, 'publications': []}
 
-from agent.base import BaseNode, NodeError
-from agent.handywriterz_state import HandyWriterzState
+scholarly = MockScholarly()
+
+from src.agent.base import BaseNode, NodeError
+from ...handywriterz_state import HandyWriterzState
 
 class ScholarNetworkAgent(BaseNode):
     """

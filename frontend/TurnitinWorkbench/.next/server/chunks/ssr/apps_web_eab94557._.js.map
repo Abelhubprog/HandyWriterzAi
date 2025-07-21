@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 7, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"","debugId":null}},
-    {"offset": {"line": 26, "column": 0}, "map": {"version":3,"sources":["file://D%3A/MultiAgentWriterz/frontend/web/HandyWriterz/apps/web/app/page.tsx"],"sourcesContent":["import { \n  Header, \n  Hero, \n  FeatureGrid, \n  HowItWorks, \n  CTA, \n  Footer \n} from \"@workspace/ui\"\n\nexport default function LandingPage() {\n  return (\n    <div className=\"bg-slate-900\">\n      <Header />\n      <Hero />\n      <FeatureGrid />\n      <HowItWorks />\n      <CTA />\n      <Footer />\n    </div>\n  )\n}\n"],"names":[],"mappings":";;;;;;;;;;;AASe,SAAS;IACtB,qBACE,6WAAC;QAAI,WAAU;;0BACb,6WAAC;;;;;0BACD,6WAAC;;;;;0BACD,6WAAC;;;;;0BACD,6WAAC;;;;;0BACD,6WAAC;;;;;0BACD,6WAAC;;;;;;;;;;;AAGP","debugId":null}}]
-}

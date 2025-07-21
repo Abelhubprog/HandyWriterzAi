@@ -2,6 +2,9 @@
 Revolutionary FastAPI application for HandyWriterz backend.
 Production-ready with comprehensive error handling and resilience patterns.
 """
+from dotenv import load_dotenv
+
+load_dotenv()
 
 import asyncio
 import json
@@ -20,11 +23,39 @@ from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import HumanMessage
+import logging
+# Configure production logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('handywriterz.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+import asyncio
+import json
+import os
+import time
+import uuid
+from contextlib import asynccontextmanager
+from typing import Dict, Any, Optional, List
+
+import redis.asyncio as redis
+import uvicorn
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.staticfiles import StaticFiles
+from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 
 # Import agent system for HandyWriterz workflow
-from agent.handywriterz_state import HandyWriterzState, UserParams
-from agent.handywriterz_graph import handywriterz_graph
+from src.agent.handywriterz_state import HandyWriterzState
+from src.agent.base import UserParams
 
 # Import simple system through organized module structure
 try:
@@ -40,42 +71,30 @@ except ImportError as e:
     SimpleState = None
 
 # Import routing system
-from agent.routing import SystemRouter, UnifiedProcessor
-from db.database import (
-    get_database, get_user_repository, get_conversation_repository,
+from src.agent.routing.unified_processor import UnifiedProcessor
+from src.db.database import (
+    get_user_repository, get_conversation_repository,
     get_document_repository, db_manager
 )
 
 # Import admin routes
-from routes.admin_models import router as admin_models_router
-from api.files import router as files_router
-from db.models import User, Conversation, Document
-from services.error_handler import (
-    error_handler, get_error_handler, ErrorContext, ErrorCategory, ErrorSeverity,
+from src.routes.admin_models import router as admin_models_router
+from src.api.files import router as files_router
+from src.services.error_handler import (
+    error_handler, ErrorContext, ErrorCategory, ErrorSeverity,
     with_error_handling, with_circuit_breaker, with_retry
 )
-from services.security_service import (
-    security_service, get_security_service, get_current_user, require_authorization,
+from src.services.security_service import (
+    security_service, get_current_user, require_authorization,
     require_rate_limit, validate_input
 )
-from middleware.error_middleware import (
+from src.middleware.error_middleware import (
     error_middleware, global_exception_handler
 )
-from middleware.security_middleware import (
+from src.middleware.security_middleware import (
     security_middleware, csrf_middleware
 )
 from scripts import init_database
-
-# Configure production logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('handywriterz.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
 
 # Async Redis client for SSE
 redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"), decode_responses=True)
@@ -228,9 +247,9 @@ app.add_exception_handler(HTTPException, global_exception_handler.handle_http_ex
 # Include admin routes
 app.include_router(admin_models_router)
 app.include_router(files_router, prefix="/api")
-from api.billing import router as billing_router
-from api.profile import router as profile_router
-from api.usage import router as usage_router
+from src.api.billing import router as billing_router
+from src.api.profile import router as profile_router
+from src.api.usage import router as usage_router
 
 app.include_router(billing_router, prefix="/api")
 app.include_router(profile_router, prefix="/api")
@@ -238,9 +257,9 @@ app.include_router(usage_router, prefix="/api")
 
 
 # Include payment system routes
-from api.payments import router as payments_router
-from api.payout import router as payout_router
-from api.checker import router as checker_router
+from src.api.payments import router as payments_router
+from src.api.payout import router as payout_router
+from src.api.checker import router as checker_router
 
 app.include_router(payments_router)
 app.include_router(payout_router)
@@ -662,12 +681,12 @@ async def verify_token(current_user: Dict[str, Any] = Depends(get_current_user))
     }
 
 
-from services.chunking_service import get_chunking_service
-from services.vector_storage import get_vector_storage
-from services.embedding_service import get_embedding_service
+from src.services.chunking_service import get_chunking_service
+from src.services.vector_storage import get_vector_storage
+from src.services.embedding_service import get_embedding_service
 
 # Unified Chat Endpoint with Intelligent Routing
-from .api.schemas.chat import ChatRequest, ChatResponse
+from src.api.schemas.chat import ChatRequest, ChatResponse
 
 @app.post("/api/chat", response_model=ChatResponse, status_code=202)
 @require_rate_limit("chat_request")
@@ -737,7 +756,7 @@ async def unified_chat_endpoint(
         }
 
         # Log successful routing
-        logger.info(f"✅ Chat processed successfully:")
+        logger.info("✅ Chat processed successfully:")
         logger.info(f"   System: {result.get('system_used')}")
         logger.info(f"   Complexity: {result.get('complexity_score'):.1f}")
         logger.info(f"   Time: {result.get('processing_time'):.2f}s")
@@ -1530,8 +1549,8 @@ async def turnitin_webhook(payload: Dict[str, Any]):
 
 
 # Import vector storage dependencies
-from services.vector_storage import get_vector_storage
-from services.embedding_service import get_embedding_service
+from src.services.vector_storage import get_vector_storage
+from src.services.embedding_service import get_embedding_service
 
 
 # Vector search endpoints
@@ -1778,25 +1797,13 @@ async def execute_writing_workflow(conversation_id: str, initial_state: HandyWri
             })
         )
 
-        # TODO: Execute the LangGraph workflow with circuit breaker
-        # Temporarily disabled until handywriterz_graph is implemented
-        # config = {"configurable": {"thread_id": conversation_id}}
+        config = {"configurable": {"thread_id": conversation_id}}
 
         workflow_start_time = time.time()
         chunk_count = 0
 
-        # Simulate workflow progress for testing
-        workflow_steps = [
-            ("planning", "Creating document outline"),
-            ("researching", "Gathering academic sources"),
-            ("filtering", "Validating source credibility"),
-            ("writing", "Generating academic content"),
-            ("evaluating", "Quality assessment"),
-            ("formatting", "Final document formatting")
-        ]
-
-        for i, (step, description) in enumerate(workflow_steps):
-            await asyncio.sleep(2)  # Simulate processing time
+        # Execute the LangGraph workflow with circuit breaker
+        async for chunk in handywriterz_graph.astream(initial_state, config):
             chunk_count += 1
 
             # Enhanced progress broadcasting
@@ -1806,9 +1813,7 @@ async def execute_writing_workflow(conversation_id: str, initial_state: HandyWri
                     "type": "workflow_progress",
                     "timestamp": time.time(),
                     "data": {
-                        "current_node": step,
-                        "description": description,
-                        "progress": (i + 1) / len(workflow_steps) * 100,
+                        **chunk,
                         "chunk_number": chunk_count,
                         "elapsed_time": time.time() - workflow_start_time
                     }
@@ -1816,29 +1821,8 @@ async def execute_writing_workflow(conversation_id: str, initial_state: HandyWri
             )
 
             # Log major progress milestones
-            logger.info(f"📍 Workflow [{conversation_id}] progressed to: {step}")
-
-        # TODO: Uncomment when handywriterz_graph is ready
-        # async for chunk in handywriterz_graph.astream(initial_state, config):
-        #     chunk_count += 1
-        #
-        #     # Enhanced progress broadcasting
-        #     await redis_client.publish(
-        #         f"sse:{conversation_id}",
-        #         json.dumps({
-        #             "type": "workflow_progress",
-        #             "timestamp": time.time(),
-        #             "data": {
-        #                 **chunk,
-        #                 "chunk_number": chunk_count,
-        #                 "elapsed_time": time.time() - workflow_start_time
-        #             }
-        #         })
-        #     )
-        #
-        #     # Log major progress milestones
-        #     if "current_node" in chunk:
-        #         logger.info(f"📍 Workflow [{conversation_id}] progressed to: {chunk['current_node']}")
+            if "current_node" in chunk:
+                logger.info(f"📍 Workflow [{conversation_id}] progressed to: {chunk['current_node']}")
 
         workflow_duration = time.time() - workflow_start_time
 

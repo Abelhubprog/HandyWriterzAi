@@ -1,6 +1,6 @@
-from typing import Dict, Any, List
-from agent.base import BaseNode
-from agent.handywriterz_state import HandyWriterzState
+from typing import Dict, Any
+from src.agent.base import BaseNode
+from ...agent.handywriterz_state import HandyWriterzState
 
 class SynthesisNode(BaseNode):
     """A node that synthesizes themes from coded data and generates a literature review."""

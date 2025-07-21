@@ -5,9 +5,7 @@ Validates the Master Orchestrator and Enhanced User Intent agents.
 """
 
 import asyncio
-import json
 import time
-from typing import Dict, Any
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import HumanMessage
@@ -204,7 +202,7 @@ async def test_agent_integration():
         orchestration_confidence = orchestrator_result.get("orchestration_confidence", 0.0)
         intent_confidence = intent_result.get("processing_confidence", 0.0)
         
-        print(f"\n📊 Integration Results:")
+        print("\n📊 Integration Results:")
         print(f"   • Orchestration Confidence: {orchestration_confidence:.1%}")
         print(f"   • Intent Processing Confidence: {intent_confidence:.1%}")
         print(f"   • Overall Integration Score: {(orchestration_confidence + intent_confidence) / 2:.1%}")
@@ -212,11 +210,11 @@ async def test_agent_integration():
         # Check workflow intelligence propagation
         workflow_intelligence = state.get("workflow_intelligence", {})
         if workflow_intelligence:
-            print(f"   • Workflow Intelligence Propagated: ✅")
+            print("   • Workflow Intelligence Propagated: ✅")
             print(f"   • Academic Complexity: {workflow_intelligence.get('academic_complexity', 'N/A')}")
             print(f"   • Success Probability: {workflow_intelligence.get('success_probability', 'N/A'):.1%}")
         else:
-            print(f"   • Workflow Intelligence Propagated: ❌")
+            print("   • Workflow Intelligence Propagated: ❌")
         
         print("✅ Agent integration test completed successfully!\n")
         return True

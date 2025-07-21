@@ -1,7 +1,7 @@
 import os
 from typing import Dict, Any
 from langchain_openai import ChatOpenAI
-from agent.handywriterz_state import HandyWriterzState
+from ...agent.handywriterz_state import HandyWriterzState
 
 class OpenAISearchAgent:
     """A search agent that uses OpenAI's GPT-4 for general intelligence."""

@@ -13,7 +13,7 @@ import uuid
 import logging
 import sys
 import os
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 # Add both backend paths to Python path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))

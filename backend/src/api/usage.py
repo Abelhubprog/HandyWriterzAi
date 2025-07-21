@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, List
+from typing import List
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 

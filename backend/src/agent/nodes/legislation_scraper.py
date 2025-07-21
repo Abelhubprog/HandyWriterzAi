@@ -1,8 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
 from typing import Dict, Any, List
-from agent.base import BaseNode
-from agent.handywriterz_state import HandyWriterzState
+from ...agent.base import BaseNode
+from ...agent.handywriterz_state import HandyWriterzState
 
 class LegislationScraperAgent(BaseNode):
     """An agent that scrapes legislation from specified government websites."""

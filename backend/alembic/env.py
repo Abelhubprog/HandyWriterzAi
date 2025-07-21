@@ -18,12 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import Base and all models
 from sqlalchemy.ext.declarative import declarative_base
-Base = declarative_base()
-
-# Import all table definitions by importing the model files
-# This ensures all tables are registered with the Base metadata
 import src.db.models
 import src.prompts.system_prompts
+Base = declarative_base()
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

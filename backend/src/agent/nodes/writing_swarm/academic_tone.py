@@ -5,12 +5,12 @@ This micro-agent ensures that the generated content has an appropriate
 academic tone, making it professional and suitable for an academic audience.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
-from agent.base import BaseNode, NodeError
-from agent.handywriterz_state import HandyWriterzState
+from src.agent.base import BaseNode
+from ...handywriterz_state import HandyWriterzState
 
 class AcademicToneAgent(BaseNode):
     """

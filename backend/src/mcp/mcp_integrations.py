@@ -3,11 +3,9 @@ MCP (Model Context Protocol) Integrations for HandyWriterz
 Production-ready MCP server implementations for external tool access.
 """
 
-import asyncio
-import json
 import logging
 from typing import Dict, Any, List, Optional, Callable
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)

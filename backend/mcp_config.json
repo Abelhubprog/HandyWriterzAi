@@ -1,0 +1,59 @@
+{
+  "name": "HandyWriterz MCP Configuration",
+  "description": "MCP servers for testing sophisticated multiagent academic writing system",
+  "servers": {
+    "web_search": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-web-search"],
+      "env": {
+        "SEARXNG_BASE_URL": "https://searx.be"
+      },
+      "capabilities": ["search", "research", "academic_sources"],
+      "description": "Web search for academic research and source discovery"
+    },
+    "filesystem": {
+      "command": "npx", 
+      "args": ["@modelcontextprotocol/server-filesystem", "/mnt/d/multiagentwriterz"],
+      "capabilities": ["read_files", "write_files", "document_processing"],
+      "description": "File system access for document upload and processing"
+    },
+    "database": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-sqlite", "/mnt/d/multiagentwriterz/backend/handywriterz.db"],
+      "capabilities": ["database_queries", "citation_management", "user_data"],
+      "description": "Database operations for citations and user management"
+    },
+    "git": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-git", "/mnt/d/multiagentwriterz"],
+      "capabilities": ["version_control", "collaboration", "document_history"],
+      "description": "Git operations for version control and collaboration"
+    }
+  },
+  "test_scenarios": [
+    {
+      "name": "academic_research_test",
+      "description": "Test research capabilities with web search MCP",
+      "servers": ["web_search"],
+      "test_query": "AI applications in cancer treatment international law 2023-2024"
+    },
+    {
+      "name": "document_processing_test", 
+      "description": "Test file upload and processing capabilities",
+      "servers": ["filesystem"],
+      "test_files": ["dissertation.docx", "research_notes.pdf"]
+    },
+    {
+      "name": "citation_management_test",
+      "description": "Test database operations for citation storage",
+      "servers": ["database"],
+      "test_operations": ["insert_citation", "search_references", "format_bibliography"]
+    },
+    {
+      "name": "collaboration_test",
+      "description": "Test version control for collaborative writing",
+      "servers": ["git"],
+      "test_operations": ["commit_draft", "branch_review", "merge_revisions"]
+    }
+  ]
+}

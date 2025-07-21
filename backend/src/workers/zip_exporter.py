@@ -1,7 +1,5 @@
-import os
 import zipfile
 from io import BytesIO
-from typing import Dict, Any
 
 def create_scorm_manifest(document_title: str) -> str:
     """Creates a basic SCORM 1.2 manifest file (imsmanifest.xml)."""

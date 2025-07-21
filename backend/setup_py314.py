@@ -8,8 +8,6 @@ import os
 import sys
 import sqlite3
 import subprocess
-import shutil
-import json
 from pathlib import Path
 from datetime import datetime
 
@@ -520,7 +518,7 @@ ENABLE_BACKGROUND_WORKERS=true
     
     def create_startup_script(self):
         """Create startup script for the server."""
-        startup_script = f"""#!/usr/bin/env python3
+        startup_script = """#!/usr/bin/env python3
 '''
 HandyWriterz Backend Startup Script
 Auto-generated for Python 3.14 compatibility
@@ -547,8 +545,8 @@ if not env_path.exists():
     sys.exit(1)
 
 print("🚀 Starting HandyWriterz Backend...")
-print(f"📄 Database: {{db_path}}")
-print(f"⚙️  Environment: {{env_path}}")
+print(f"📄 Database: {db_path}")
+print(f"⚙️  Environment: {env_path}")
 
 try:
     # Import and run the main application
@@ -567,11 +565,11 @@ try:
     )
     
 except ImportError as e:
-    print(f"❌ Import error: {{e}}")
+    print(f"❌ Import error: {e}")
     print("💡 Try installing packages: python setup_py314.py --install-only")
     sys.exit(1)
 except Exception as e:
-    print(f"❌ Startup error: {{e}}")
+    print(f"❌ Startup error: {e}")
     sys.exit(1)
 """
         

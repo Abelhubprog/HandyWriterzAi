@@ -1,11 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
-import uuid
 
 from db.database import get_db
 from db.models import StudyCircle, StudyCircleMember, StudyCircleDocument, User, Document
-from services.supabase_service import get_supabase_client
+from src.services.supabase_service import get_supabase_client
 
 router = APIRouter(
     prefix="/api/circle",

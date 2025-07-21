@@ -6,7 +6,6 @@ Installs only essential packages and sets up the database.
 
 import subprocess
 import sys
-import os
 from pathlib import Path
 
 

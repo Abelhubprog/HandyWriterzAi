@@ -1,8 +1,8 @@
-from typing import Dict, Any, List
+from typing import Dict, Any
 import chromadb
 from sentence_transformers import SentenceTransformer
-from agent.base import BaseNode
-from agent.handywriterz_state import HandyWriterzState
+from src.agent.base import BaseNode
+from ...agent.handywriterz_state import HandyWriterzState
 
 class RAGSummarizerNode(BaseNode):
     """A node that uses RAG to summarize documents."""

@@ -6,15 +6,11 @@ import asyncio
 import logging
 import uuid
 from pathlib import Path
-from typing import List, Dict, Any, Optional
-import tempfile
-import subprocess
-import json
+from typing import List, Dict, Any
 
 from docx import Document
 import PyPDF2
 import aiofiles
-import aiohttp
 
 logger = logging.getLogger(__name__)
 

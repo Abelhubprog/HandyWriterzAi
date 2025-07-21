@@ -8,68 +8,70 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 
-from agent.handywriterz_state import HandyWriterzState
-from agent.nodes.user_intent import UserIntentNode
-from agent.nodes.planner import PlannerNode
-from agent.nodes.writer import revolutionary_writer_agent_node as WriterNode
-from agent.nodes.memory_writer import MemoryWriterNode
-from agent.nodes.memory_retriever import MemoryRetrieverNode
+from .handywriterz_state import HandyWriterzState
+from .nodes.user_intent import UserIntentNode
+from .nodes.planner import PlannerNode
+from .nodes.writer import revolutionary_writer_agent_node as WriterNode
+from .nodes.memory_writer import MemoryWriter as MemoryWriterNode
+from .nodes.memory_retriever import MemoryRetrieverNode
 
 # Revolutionary new agents
-from agent.nodes.master_orchestrator import MasterOrchestratorAgent
-from agent.nodes.enhanced_user_intent import EnhancedUserIntentAgent
+from .nodes.master_orchestrator import MasterOrchestratorAgent
+from .nodes.enhanced_user_intent import EnhancedUserIntentAgent
 
 # Revolutionary sophisticated agents
-from agent.nodes.evaluator import EvaluatorNode
-from agent.nodes.turnitin_advanced import revolutionary_turnitin_node
-from agent.nodes.formatter_advanced import revolutionary_formatter_node
-from agent.nodes.fail_handler_advanced import revolutionary_fail_handler_node
+from .nodes.evaluator import EvaluatorNode
+from .nodes.turnitin_advanced import revolutionary_turnitin_node
+from .nodes.formatter_advanced import revolutionary_formatter_node
+from .nodes.fail_handler_advanced import revolutionary_fail_handler_node
 
 # Revolutionary swarm intelligence agents
-from agent.nodes.swarm_intelligence_coordinator import swarm_intelligence_coordinator_node
-from agent.nodes.emergent_intelligence_engine import emergent_intelligence_engine_node
+from .nodes.swarm_intelligence_coordinator import swarm_intelligence_coordinator_node
+from .nodes.emergent_intelligence_engine import emergent_intelligence_engine_node
 
 # EvidenceGuard nodes
-from agent.nodes.search_crossref import SearchCrossRef
-from agent.nodes.search_pmc import SearchPMC
-from agent.nodes.search_ss import SearchSS
-from agent.nodes.source_verifier import SourceVerifier
-from agent.nodes.citation_audit import CitationAudit
-from agent.nodes.source_filter import SourceFilterNode
-from agent.nodes.source_fallback_controller import SourceFallbackController
+from .nodes.search_crossref import SearchCrossRef
+from .nodes.search_pmc import SearchPMC
+from .nodes.search_ss import SearchSS
+from .nodes.source_verifier import SourceVerifier
+from .nodes.citation_audit import CitationAudit
+from .nodes.source_filter import SourceFilterNode
+from .nodes.source_fallback_controller import SourceFallbackController
 
 # Production-ready AI search agents
-from agent.nodes.search_gemini import GeminiSearchAgent
-from agent.nodes.search_perplexity import PerplexitySearchAgent
-from agent.nodes.search_o3 import O3SearchAgent
-from agent.nodes.search_claude import ClaudeSearchAgent
-from agent.nodes.search_deepseek import DeepseekSearchAgent
-from agent.nodes.search_qwen import QwenSearchAgent
-from agent.nodes.search_grok import GrokSearchAgent
-from agent.nodes.search_openai import OpenAISearchAgent
-from agent.nodes.search_github import GitHubSearchAgent
-from tools.github_tools import GitHubIssuesTool
-from agent.nodes.aggregator import AggregatorNode
-from agent.nodes.rag_summarizer import RAGSummarizerNode
-from agent.nodes.search_scholar import ScholarSearchAgent
-from agent.nodes.legislation_scraper import LegislationScraperAgent
-from agent.nodes.prisma_filter import PRISMAFilterNode
-from agent.nodes.synthesis import SynthesisNode
-from agent.nodes.methodology_writer import MethodologyWriterNode
-from tools.casp_appraisal_tool import CASPAppraisalTool
-from tools.mermaid_diagram_tool import MermaidDiagramTool
-from tools.gibbs_framework_tool import GibbsFrameworkTool
-from tools.action_plan_template_tool import ActionPlanTemplateTool
-from tools.case_study_framework_tool import CaseStudyFrameworkTool
-from tools.cost_model_tool import CostModelTool
+from .nodes.search_gemini import GeminiSearchAgent
+from .nodes.search_perplexity import PerplexitySearchAgent
+from .nodes.search_o3 import O3SearchAgent
+from .nodes.search_claude import ClaudeSearchAgent
+# from .nodes.search_deepseek import DeepseekSearchAgent  # Temporarily disabled
+# from .nodes.search_qwen import QwenSearchAgent  # Temporarily disabled
+# from .nodes.search_grok import GrokSearchAgent  # Temporarily disabled
+from .nodes.search_openai import OpenAISearchAgent
+from .nodes.search_github import GitHubSearchAgent
+from src.tools.github_tools import GitHubIssuesTool
+# from .nodes.search_github import GitHubSearchAgent  # Temporarily disabled
+# from src.tools.github_tools import GitHubIssuesTool  # Temporarily disabled
+from .nodes.aggregator import AggregatorNode
+from .nodes.rag_summarizer import RAGSummarizerNode
+from .nodes.search_scholar import ScholarSearchAgent
+from .nodes.legislation_scraper import LegislationScraperAgent
+from .nodes.prisma_filter import PRISMAFilterNode
+from .nodes.synthesis import SynthesisNode
+from .nodes.methodology_writer import MethodologyWriterNode
+from src.tools.casp_appraisal_tool import CASPAppraisalTool
+from src.tools.mermaid_diagram_tool import MermaidDiagramTool
+from src.tools.gibbs_framework_tool import GibbsFrameworkTool
+from src.tools.action_plan_template_tool import ActionPlanTemplateTool
+from src.tools.case_study_framework_tool import CaseStudyFrameworkTool
+from src.tools.cost_model_tool import CostModelTool
 
 # Intelligent intent analysis
-from agent.nodes.intelligent_intent_analyzer import IntelligentIntentAnalyzer
-from config.model_config import get_model_config
+from .nodes.intelligent_intent_analyzer import IntelligentIntentAnalyzer
+from src.config.model_config import get_model_config
 
 load_dotenv()
 
-# Validate required environment variables
+# Validate required environment variables (disabled for demo startup)
 required_env_vars = [
     "GEMINI_API_KEY",
     "PERPLEXITY_API_KEY", 
@@ -78,9 +80,10 @@ required_env_vars = [
     "REDIS_URL",
 ]
 
-for var in required_env_vars:
-    if not os.getenv(var):
-        raise ValueError(f"Required environment variable {var} is not set")
+# Commented out for demo - agents will handle missing keys gracefully
+# for var in required_env_vars:
+#     if not os.getenv(var):
+#         raise ValueError(f"Required environment variable {var} is not set")
 
 
 class HandyWriterzOrchestrator:
@@ -127,6 +130,7 @@ class HandyWriterzOrchestrator:
             "qwen": QwenSearchAgent(),
             "grok": GrokSearchAgent(),
             "openai": OpenAISearchAgent(),
+            "github": GitHubSearchAgent(),
             "github": GitHubSearchAgent(),
         }
         
@@ -192,6 +196,7 @@ class HandyWriterzOrchestrator:
         builder.add_node("synthesis", self._execute_synthesis)
         builder.add_node("methodology_writer", self._execute_methodology_writer)
         builder.add_node("generate_prisma_diagram", self._execute_generate_prisma_diagram)
+        builder.add_node("execute_parallel_searches", self._execute_parallel_searches)
         
         # Add intelligent intent analyzer
         builder.add_node("intelligent_intent_analyzer", self._execute_intelligent_intent_analyzer)
@@ -223,16 +228,6 @@ class HandyWriterzOrchestrator:
         # After retrieving memory, proceed to the planner
         builder.add_edge("memory_retriever", "planner")
 
-        # The EnhancedUserIntentAgent decides whether to proceed or ask for clarification
-        builder.add_conditional_edges(
-            "enhanced_user_intent",
-            self._route_after_intent_analysis,
-            {
-                "planner": "planner",
-                "clarification_needed": END
-            }
-        )
-
         # The planner decides which sub-graph to execute
         builder.add_conditional_edges(
             "planner",
@@ -247,21 +242,131 @@ class HandyWriterzOrchestrator:
             }
         )
 
-        # Build the dissertation pipeline
-        self._create_dissertation_pipeline(builder)
+        # Default pipeline: Master Orchestrator routes to Enhanced User Intent or User Intent
+        builder.add_conditional_edges(
+            "master_orchestrator",
+            self._route_from_orchestrator,
+            {
+                "enhanced_user_intent": "enhanced_user_intent",
+                "user_intent": "user_intent"
+            }
+        )
 
-        # From formatter to memory writer for fingerprint storage
+        # Enhanced User Intent Analyzer decides whether to proceed or ask for clarification
+        builder.add_conditional_edges(
+            "enhanced_user_intent",
+            self._route_after_intent_analysis,
+            {
+                "proceed_to_search": "execute_parallel_searches", # Trigger parallel search
+                "clarification_needed": END
+            }
+        )
+
+        # User Intent (legacy) also proceeds to parallel search
+        builder.add_edge("user_intent", "execute_parallel_searches")
+
+        # All parallel search agents join into aggregator
+        builder.add_edge("execute_parallel_searches", "aggregator") # This implicitly handles the fan-out and join
+        builder.add_edge("search_crossref", "aggregator")
+        builder.add_edge("search_pmc", "aggregator")
+        builder.add_edge("search_ss", "aggregator")
+        for agent_name in self.enabled_search_agents:
+            builder.add_edge(f"search_{agent_name}", "aggregator")
+
+        # Aggregator to RAG Summarizer
+        builder.add_edge("aggregator", "rag_summarizer")
+
+        # RAG Summarizer to Source Verifier
+        builder.add_edge("rag_summarizer", "source_verifier")
+
+        # Source Verifier to Source Filter or Fallback
+        builder.add_conditional_edges(
+            "source_verifier",
+            self._route_after_source_verifier,
+            {
+                "source_filter": "source_filter",
+                "source_fallback_controller": "source_fallback_controller"
+            }
+        )
+
+        # Source Fallback Controller routes back to search or fail
+        builder.add_conditional_edges(
+            "source_fallback_controller",
+            self._route_from_fail_handler, # Re-using fail handler routing for now
+            {"search_crossref": "search_crossref", "end": "fail_handler_advanced"} # Route back to search or fail
+        )
+
+        # Source Filter to Writer or Swarm Coordinator
+        builder.add_conditional_edges(
+            "source_filter",
+            self._route_after_source_filter,
+            {
+                "writer": "writer",
+                "swarm_coordinator": "swarm_coordinator"
+            }
+        )
+
+        # Swarm Coordinator to Emergent Intelligence
+        builder.add_edge("swarm_coordinator", "emergent_intelligence")
+
+        # Emergent Intelligence to Writer
+        builder.add_edge("emergent_intelligence", "writer")
+
+        # Writer to Evaluator
+        builder.add_edge("writer", "evaluator")
+
+        # Evaluator to Turnitin or Fail Handler
+        builder.add_conditional_edges(
+            "evaluator",
+            self._route_after_evaluation,
+            {
+                "turnitin_advanced": "turnitin_advanced",
+                "fail_handler_advanced": "fail_handler_advanced"
+            }
+        )
+
+        # Turnitin to Formatter, Writer (for revision), or Fail Handler
+        builder.add_conditional_edges(
+            "turnitin_advanced",
+            self._route_after_turnitin,
+            {
+                "formatter_advanced": "formatter_advanced",
+                "writer": "writer", # For revision
+                "fail_handler_advanced": "fail_handler_advanced"
+            }
+        )
+
+        # Citation Audit to Writer (for revision) or Formatter
+        builder.add_conditional_edges(
+            "citation_audit",
+            self._route_after_citation_audit,
+            {
+                "revision_needed": "writer", # Loop back to writer for revision
+                "proceed": "formatter_advanced" # Proceed to formatting
+            }
+        )
+
+        # Formatter to Memory Writer
         builder.add_edge("formatter_advanced", "memory_writer")
         
-        # Complete workflow
+        # Memory Writer to End
         builder.add_edge("memory_writer", END)
         
-        # Fail handler routes back to appropriate recovery
+        # Fail handler routes back to appropriate recovery or END
         builder.add_conditional_edges(
             "fail_handler_advanced",
             self._route_from_fail_handler,
             {"writer": "writer", "search_crossref": "search_crossref", "swarm_coordinator": "swarm_coordinator", "end": END}
         )
+
+        # Build the dissertation pipeline
+        self._create_dissertation_pipeline(builder)
+
+        # Build placeholder pipelines
+        self._create_reflection_pipeline(builder)
+        self._create_case_study_pipeline(builder)
+        self._create_technical_report_pipeline(builder)
+        self._create_comparative_essay_pipeline(builder)
     
     def _route_to_pipeline(self, state: HandyWriterzState) -> str:
         """Routes to the correct pipeline based on the planner's output."""
@@ -290,27 +395,37 @@ class HandyWriterzOrchestrator:
 
     def _create_reflection_pipeline(self, builder: StateGraph):
         """Creates the sub-graph for the reflection workflow."""
-        # Placeholder for reflection pipeline
-        builder.add_node("privacy_manager", self._execute_placeholder)
-        builder.add_edge("privacy_manager", "formatter_advanced")
+        builder.add_node("privacy_manager", self._execute_placeholder) # Still a placeholder for now
+        builder.add_edge("privacy_manager", "user_intent") # Re-evaluate intent for reflection
+        builder.add_edge("user_intent", "writer") # Write the reflection
+        builder.add_edge("writer", "evaluator") # Evaluate the reflection
+        builder.add_edge("evaluator", "formatter_advanced") # Format the reflection
 
     def _create_case_study_pipeline(self, builder: StateGraph):
         """Creates the sub-graph for the case study workflow."""
-        # Placeholder for case study pipeline
-        builder.add_node("fetch_case_data", self._execute_placeholder)
-        builder.add_edge("fetch_case_data", "formatter_advanced")
+        builder.add_node("fetch_case_data", self._execute_placeholder) # Placeholder for data fetching
+        builder.add_edge("fetch_case_data", "aggregator") # Aggregate case data
+        builder.add_edge("aggregator", "rag_summarizer") # Summarize case data
+        builder.add_edge("rag_summarizer", "writer") # Write the case study
+        builder.add_edge("writer", "evaluator") # Evaluate the case study
+        builder.add_edge("evaluator", "formatter_advanced") # Format the case study
 
     def _create_technical_report_pipeline(self, builder: StateGraph):
         """Creates the sub-graph for the technical report workflow."""
-        # Placeholder for technical report pipeline
-        builder.add_node("search_github_for_benchmarks", self._execute_placeholder)
-        builder.add_edge("search_github_for_benchmarks", "formatter_advanced")
+        builder.add_edge("search_github", "aggregator") # Search GitHub for relevant info
+        builder.add_edge("aggregator", "rag_summarizer") # Summarize search results
+        builder.add_edge("rag_summarizer", "writer") # Write the technical report
+        builder.add_edge("writer", "evaluator") # Evaluate the report
+        builder.add_edge("evaluator", "formatter_advanced") # Format the report
 
     def _create_comparative_essay_pipeline(self, builder: StateGraph):
         """Creates the sub-graph for the comparative essay workflow."""
-        # Placeholder for comparative essay pipeline
-        builder.add_node("search_for_press_releases", self._execute_placeholder)
-        builder.add_edge("search_for_press_releases", "formatter_advanced")
+        builder.add_edge("scholar_search", "aggregator") # Search for academic sources
+        builder.add_edge("aggregator", "rag_summarizer") # Summarize sources
+        builder.add_edge("rag_summarizer", "synthesis") # Synthesize information for comparison
+        builder.add_edge("synthesis", "writer") # Write the comparative essay
+        builder.add_edge("writer", "evaluator") # Evaluate the essay
+        builder.add_edge("evaluator", "formatter_advanced") # Format the essay
 
     async def _execute_placeholder(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """A placeholder node for unimplemented pipelines."""
@@ -564,6 +679,10 @@ class HandyWriterzOrchestrator:
         prisma_counts = state.get("prisma_counts", {})
         prisma_diagram = self.mermaid_diagram_tool.generate_prisma_diagram(prisma_counts)
         return {"prisma_diagram": prisma_diagram}
+
+    async def _execute_parallel_searches(self, state: HandyWriterzState, config: RunnableConfig) -> List[Send]:
+        """Execute all enabled AI search agents in parallel."""
+        return self._route_to_ai_search_agents(state)
 
     async def _execute_source_filter(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """Execute source filtering."""

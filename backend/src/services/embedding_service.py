@@ -6,7 +6,7 @@ Production-ready text embeddings for semantic search and vector operations.
 import os
 import logging
 import asyncio
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional
 import numpy as np
 from openai import AsyncOpenAI
 import tiktoken

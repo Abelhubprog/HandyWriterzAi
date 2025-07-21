@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - AGENTIC_DOC_SERVICE_URL=http://agentic-doc-service:8000
+    depends_on:
+      - agentic-doc-service
+
+  agentic-doc-service:
+    build:
+      context: ./agentic-doc-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./agentic-doc-service:/app

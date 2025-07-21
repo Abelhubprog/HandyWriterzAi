@@ -4,7 +4,6 @@ Monitors checker claims and automatically resets expired ones.
 """
 
 import asyncio
-import json
 import time
 import logging
 from datetime import datetime, timedelta
@@ -12,11 +11,10 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass
 
 import redis.asyncio as redis
-from sqlalchemy.orm import Session
 
 from db.database import get_database
 from db.models import DocChunk, Checker, ChunkStatus
-from services.notification_service import NotificationService
+from src.services.notification_service import NotificationService
 
 
 @dataclass

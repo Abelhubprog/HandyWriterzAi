@@ -1,15 +1,12 @@
 """Planner node for creating comprehensive outlines and research agendas."""
 
-import json
-import os
 from typing import Dict, Any, List
 
 from langchain_core.runnables import RunnableConfig
-from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel
 
-from agent.base import BaseNode, UserParams, DocumentChunk
-from agent.handywriterz_state import HandyWriterzState
+from ..base import BaseNode, UserParams
+from ..handywriterz_state import HandyWriterzState
 
 
 class OutlineSection(BaseModel):

@@ -32,3 +32,30 @@ class SupabaseService:
         except Exception as e:
             print(f"Error retrieving user memory: {e}")
             return None
+
+
+def get_supabase_client() -> Client:
+    """Get Supabase client instance."""
+    url: str = os.environ.get("SUPABASE_URL")
+    key: str = os.environ.get("SUPABASE_KEY")
+    if not url or not key:
+        # Return a mock client for testing
+        class MockClient:
+            def table(self, table_name):
+                return MockTable()
+        return MockClient()
+    return create_client(url, key)
+
+
+class MockTable:
+    """Mock table for testing."""
+    def select(self, *args):
+        return self
+    def eq(self, *args):
+        return self
+    def single(self):
+        return self
+    def execute(self):
+        return None, 0
+    def upsert(self, *args):
+        return self

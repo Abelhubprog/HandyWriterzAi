@@ -4,23 +4,16 @@ Production-ready security middleware with comprehensive protection layers,
 threat detection, and advanced validation.
 """
 
-import json
 import logging
 import time
-import re
-import hashlib
-from typing import Dict, Any, Callable, List, Optional
-from datetime import datetime, timedelta
-from dataclasses import dataclass
-from enum import Enum
+from typing import Dict, Any, Callable
 
-import redis.asyncio as redis
 from fastapi import Request, Response, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from services.security_service import security_service, SecurityConfig
-from services.error_handler import error_handler, ErrorContext, ErrorCategory, ErrorSeverity
+from src.services.security_service import security_service, SecurityConfig
+from src.services.error_handler import error_handler, ErrorContext, ErrorCategory, ErrorSeverity
 
 logger = logging.getLogger(__name__)
 

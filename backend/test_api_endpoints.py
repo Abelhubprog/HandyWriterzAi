@@ -5,7 +5,6 @@ Test API endpoints functionality
 
 import sys
 import os
-import json
 import asyncio
 import tempfile
 from pathlib import Path
@@ -197,7 +196,7 @@ def test_state_serialization():
         state_dict = state.to_dict()
         
         if isinstance(state_dict, dict):
-            print(f"✅ State serialized successfully")
+            print("✅ State serialized successfully")
             print(f"   Conversation ID: {state_dict.get('conversation_id')}")
             print(f"   Workflow Status: {state_dict.get('workflow_status')}")
             print(f"   Progress: {state_dict.get('progress_percentage'):.1f}%")

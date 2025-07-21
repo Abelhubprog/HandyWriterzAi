@@ -31,7 +31,7 @@ class SystemRouter:
         # Initialize complexity analyzer
         self.complexity_analyzer = ComplexityAnalyzer()
         
-        logger.info(f"🎯 SystemRouter initialized:")
+        logger.info("🎯 SystemRouter initialized:")
         logger.info(f"   Simple system: {'Available' if self.simple_available else 'Unavailable'}")
         logger.info(f"   Advanced system: {'Available' if self.advanced_available else 'Unavailable'}")
         logger.info(f"   Complexity thresholds: {self.simple_max_complexity} < hybrid < {self.advanced_min_complexity}")

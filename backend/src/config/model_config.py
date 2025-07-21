@@ -8,35 +8,32 @@ MODEL_CONFIG = {
     "intent_parser": "gemini-2.5-pro",
     "planner": "gemini-2.5-pro",
     "search": {
-        "primary": "gemini-2.5-pro",
-        "secondary": "grok-4",
-        "tertiary": "openai-03",
+        "primary": "perplexity",
+        "secondary": "gemini-2.5-pro",
     },
     "writing": {
         "primary": "gemini-2.5-pro",
-        "fallback": ["grok-4", "openai-03"],
+        "fallback": "gemini-2.0-pro"
     },
     "evaluation": {
         "primary": "gemini-2.5-pro",
-        "secondary": "grok-4",
-        "tertiary": "openai-03",
     },
     "orchestration": {
         "strategic_planner": "gemini-2.5-pro",
-        "quality_assessor": "gpt-4o",
-        "workflow_optimizer": "grok-4",
-        "innovation_catalyst": "openai-03",
+        "quality_assessor": "gemini-2.5-pro",
+        "workflow_optimizer": "gemini-2.5-pro",
+        "innovation_catalyst": "gemini-2.5-pro",
     },
 }
 
 def get_model_config(task: str):
     """
     Retrieves the model configuration for a specific task.
-    
+
     Args:
-        task (str): The task for which to retrieve the model configuration 
+        task (str): The task for which to retrieve the model configuration
                     (e.g., "intent_parser", "search", "writing").
-                    
+
     Returns:
         The model configuration for the specified task.
     """

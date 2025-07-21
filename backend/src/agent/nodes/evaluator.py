@@ -1,81 +1,154 @@
-from typing import Dict, Any, List
-from agent.base import BaseNode
-from agent.handywriterz_state import HandyWriterzState
-from services.llm_service import get_llm_client
 import asyncio
+import json
+from typing import Dict, Any, List
+
+from ..base import BaseNode
+from ..handywriterz_state import HandyWriterzState
+from src.services.llm_service import get_all_llm_clients
 
 class EvaluatorNode(BaseNode):
     """
-    A node that evaluates the final draft against the user's learning outcomes
-    and uses a swarm of marker agents to score the work.
+    A sophisticated node that uses a multi-model consensus approach to evaluate
+    the generated draft against a detailed academic rubric.
     """
 
     def __init__(self, name: str):
         super().__init__(name)
-        self.marker_models = ["pro", "opus", "sonnet"] # Gemini 1.5 Pro, Claude 3 Opus, Claude 3 Sonnet
+        self.llm_clients = get_all_llm_clients()
+        self.evaluation_criteria = {
+            "Academic_Rigor": 0.25,
+            "Content_Quality": 0.20,
+            "Structure_Organization": 0.15,
+            "Citation_Excellence": 0.15,
+            "Writing_Quality": 0.15,
+            "Innovation_Impact": 0.10,
+        }
+
+    def _create_evaluation_prompt(self, draft: str) -> str:
+        """Creates a detailed prompt for the evaluation models."""
+        return f"""
+        You are an expert academic evaluator. Your task is to provide a rigorous, unbiased evaluation of the following academic draft.
+
+        **Draft to Evaluate:**
+        ---
+        {draft[:15000]}
+        ---
+
+        **Evaluation Criteria:**
+        Please provide a score from 0 to 100 for each of the following criteria.
+
+        1.  **Academic_Rigor:**
+            -   Methodological Soundness
+            -   Evidence Quality
+            -   Analytical Depth
+            -   Critical Thinking
+
+        2.  **Content_Quality:**
+            -   Thesis Clarity
+            -   Argument Strength
+            -   Evidence Integration
+            -   Original Contribution
+
+        3.  **Structure_Organization:**
+            -   Logical Flow
+            -   Section Balance
+            -   Transition Quality
+
+        4.  **Citation_Excellence:**
+            -   Citation Style Accuracy
+            -   Source Credibility
+            -   Reference Completeness
+
+        5.  **Writing_Quality:**
+            -   Academic Tone
+            -   Clarity and Precision
+            -   Grammar and Syntax
+
+        6.  **Innovation_Impact:**
+            -   Novel Insights
+            -   Interdisciplinary Integration
+            -   Practical Applications
+
+        **Output Format:**
+        You MUST return a single, valid JSON object with keys corresponding to the criteria above (e.g., "Academic_Rigor", "Content_Quality"). The value for each key should be the score (0-100). Do not include any other text or explanations.
+        """
 
     async def execute(self, state: HandyWriterzState) -> Dict[str, Any]:
         """
-        Evaluates the draft, maps learning outcomes, and gets scores from marker agents.
+        Executes the multi-model evaluation process.
         """
-        print("⚖️ Executing EvaluatorNode")
-        final_draft = state.get("final_draft_content")
-        user_params = state.get("user_params", {})
-        learning_outcomes = user_params.get("learning_outcomes", [])
+        self.logger.info("⚖️ Executing Multi-Model EvaluatorNode")
+        draft_content = state.get("generated_content")
 
-        if not final_draft:
-            print("⚠️ EvaluatorNode: Missing final_draft, skipping.")
-            return {}
+        if not draft_content:
+            self.logger.warning("EvaluatorNode: Missing draft_content, skipping.")
+            return {"evaluation_score": 0, "evaluation_report": "Draft content was not provided."}
 
-        # 1. Map learning outcomes
-        lo_mapping_report = await self._map_learning_outcomes(final_draft, learning_outcomes)
+        evaluation_prompt = self._create_evaluation_prompt(draft_content)
 
-        # 2. Get scores from marker agents
-        marker_scores = await self._get_marker_scores(final_draft)
-        average_score = sum(marker_scores) / len(marker_scores) if marker_scores else 0
+        # --- Multi-Model Evaluation ---
+        evaluation_tasks = []
+        for client in self.llm_clients.values():
+            evaluation_tasks.append(client.generate(evaluation_prompt, max_tokens=1000, is_json=True))
+        
+        responses = await asyncio.gather(*evaluation_tasks, return_exceptions=True)
 
-        # 3. Determine if the write-up is complete
-        is_complete = average_score >= 80
+        # --- Consensus Building ---
+        valid_evaluations = []
+        for i, res in enumerate(responses):
+            if not isinstance(res, Exception):
+                try:
+                    valid_evaluations.append(json.loads(res))
+                except json.JSONDecodeError:
+                    self.logger.warning(f"Model {list(self.llm_clients.keys())[i]} produced invalid JSON for evaluation.")
+
+        if not valid_evaluations:
+            self.logger.error("All evaluation models failed to produce valid JSON.")
+            return {"evaluation_score": 0, "evaluation_report": "Evaluation failed due to model errors."}
+
+        # --- Weighted Score Calculation ---
+        final_scores = {key: 0 for key in self.evaluation_criteria}
+        for eval_result in valid_evaluations:
+            for key in self.evaluation_criteria:
+                final_scores[key] += eval_result.get(key, 0)
+        
+        # Average the scores
+        for key in final_scores:
+            final_scores[key] /= len(valid_evaluations)
+
+        # Calculate the final weighted score
+        weighted_score = sum(final_scores[key] * weight for key, weight in self.evaluation_criteria.items())
+
+        # --- Generate Evaluation Report ---
+        evaluation_report = self._generate_evaluation_report(final_scores)
+        
+        # Determine if the write-up is complete
+        is_complete = weighted_score >= 85.0
 
         return {
-            "learning_outcomes_report": lo_mapping_report,
-            "marker_scores": marker_scores,
-            "average_score": average_score,
+            "evaluation_results": final_scores,
+            "evaluation_score": weighted_score,
+            "evaluation_report": evaluation_report,
             "is_complete": is_complete,
         }
 
-    async def _map_learning_outcomes(self, draft: str, learning_outcomes: List[str]) -> str:
-        """Maps the draft content to the specified learning outcomes."""
-        if not learning_outcomes:
-            return "No learning outcomes provided."
-
-        llm = get_llm_client("pro")
-        prompt = f"""
-        Analyze the following draft and explain how it meets each of the following learning outcomes.
-        Provide specific examples from the text to support your analysis.
-
-        Draft:
-        ---
-        {draft[:8000]}
-        ---
-
-        Learning Outcomes:
-        - {"\n- ".join(learning_outcomes)}
-        """
-        report = await llm.generate(prompt, max_tokens=2000)
-        return report
-
-    async def _get_marker_scores(self, draft: str) -> List[float]:
-        """Gets scores from a swarm of marker agents."""
+    def _generate_evaluation_report(self, scores: Dict[str, float]) -> str:
+        """Generates a summary report of the evaluation."""
+        report = "Evaluation Summary:\n\n"
+        for criterion, score in scores.items():
+            report += f"- {criterion.replace('_', ' ')}: {score:.1f}/100\n"
         
-        async def get_score(model_preference: str):
-            llm = get_llm_client(model_preference)
-            prompt = f"Based on the following academic draft, please provide a percentage score (0-100) representing its quality. Only return the number. \n\n---\n{draft[:8000]}"
-            try:
-                response = await llm.generate(prompt, max_tokens=10)
-                return float(response.strip())
-            except (ValueError, TypeError):
-                return 75.0 # Default score on failure
+        strengths = [criterion for criterion, score in scores.items() if score >= 85]
+        weaknesses = [criterion for criterion, score in scores.items() if score < 75]
 
-        scores = await asyncio.gather(*[get_score(model) for model in self.marker_models])
-        return [score for score in scores if score is not None]
+        if strengths:
+            report += "\n**Strengths:**\n"
+            for s in strengths:
+                report += f"- Strong performance in {s.replace('_', ' ')}.\n"
+        
+        if weaknesses:
+            report += "\n**Areas for Improvement:**\n"
+            for w in weaknesses:
+                report += f"- Consider refining the {w.replace('_', ' ')}.\n"
+        
+        return report

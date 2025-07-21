@@ -3,21 +3,18 @@ Gemini Search Agent - Production-Ready Implementation
 Revolutionary AI-powered search using Google's Gemini for academic research.
 """
 
-import asyncio
 import json
 import time
-import httpx
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from dataclasses import dataclass, asdict
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 
-from agent.base import BaseNode, broadcast_sse_event, NodeError
-from agent.handywriterz_state import HandyWriterzState
-from prompts.system_prompts import secure_prompt_loader
+from src.agent.base import BaseNode, NodeError
+from ...agent.handywriterz_state import HandyWriterzState
+from src.prompts.system_prompts import secure_prompt_loader
 
 
 @dataclass
@@ -69,7 +66,7 @@ class GeminiSearchAgent(BaseNode):
     def _initialize_gemini_client(self):
         """Initialize dynamic model service."""
         try:
-            from services.model_service import get_model_service
+            from src.services.model_service import get_model_service
             self.model_service = get_model_service()
             self.agent_name = "search_gemini"
             

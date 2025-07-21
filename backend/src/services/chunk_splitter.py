@@ -4,20 +4,17 @@ Intelligently splits documents into 350-word chunks while preserving context and
 """
 
 import asyncio
-import json
 import logging
-import os
 import re
 import time
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from enum import Enum
 
 import aiofiles
 import redis.asyncio as redis
-from sqlalchemy.orm import Session
 
 from db.database import get_database
 from db.models import DocLot, DocChunk, ChunkStatus
@@ -199,38 +196,28 @@ class ChunkSplitter:
             self.logger.error(f"Failed to split document for lot {lot_id}: {e}")
             raise
 
-    async def _extract_text_from_pdf(self, file_path: str) -> str:
-        import PyPDF2
-        from io import BytesIO
-        async with aiofiles.open(file_path, 'rb') as f:
-            content = await f.read()
-        pdf_reader = PyPDF2.PdfReader(BytesIO(content))
-        return "\n".join(page.extract_text() for page in pdf_reader.pages)
-
-    async def _extract_text_from_docx(self, file_path: str) -> str:
-        import mammoth
-        from io import BytesIO
-        async with aiofiles.open(file_path, 'rb') as f:
-            content = await f.read()
-        text_result = mammoth.extract_raw_text(BytesIO(content))
-        return text_result.value
+    async def _extract_text_from_file(self, file_path: str) -> str:
+        """Extracts text from a file using agentic-doc."""
+        from agentic_doc.parse import parse
+        try:
+            # agentic-doc's parse function is synchronous, so we run it in an executor
+            loop = asyncio.get_running_loop()
+            parsed_doc = await loop.run_in_executor(None, parse, file_path)
+            return parsed_doc.text
+        except Exception as e:
+            self.logger.error(f"Failed to extract text with agentic-doc for {file_path}: {e}")
+            # As a fallback, you could implement a simpler extraction method here if needed.
+            raise
 
     async def _split_pdf(self, file_path: str, lot_id: str) -> List[DocumentChunk]:
-        """Split PDF into chunks of 1400 characters with 50% overlap."""
-        content = await self._extract_text_from_pdf(file_path)
-        # Simple character-based chunking for PDFs
-        char_limit = 1400
-        overlap = 700
-        chunks = []
-        for i in range(0, len(content), char_limit - overlap):
-            chunk_text = content[i:i + char_limit]
-            chunk = self._create_chunk(chunk_text.split(), len(chunks), i, lot_id)
-            chunks.append(chunk)
-        return chunks
+        """Split PDF into chunks."""
+        content = await self._extract_text_from_file(file_path)
+        # The rest of the splitting logic can now use the clean markdown from agentic-doc
+        return await self._execute_split(content, self._choose_splitting_strategy(await self._analyze_document(content)), lot_id)
 
     async def _split_docx(self, file_path: str, lot_id: str) -> List[DocumentChunk]:
         """Split DOCX by paragraph."""
-        content = await self._extract_text_from_docx(file_path)
+        content = await self._extract_text_from_file(file_path)
         return await self._split_paragraph_boundary(content, lot_id)
 
     async def _split_pptx(self, file_path: str, lot_id: str) -> List[DocumentChunk]:
@@ -879,7 +866,7 @@ if __name__ == "__main__":
         # Test document splitting
         result = await splitter.split_document(test_document, "Test Document", "test_user")
 
-        print(f"Split result:")
+        print("Split result:")
         print(f"  Lot ID: {result.lot_id}")
         print(f"  Total chunks: {result.total_chunks}")
         print(f"  Strategy used: {result.strategy_used.value}")

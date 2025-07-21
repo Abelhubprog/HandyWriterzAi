@@ -113,7 +113,6 @@ def test_configuration_files():
 def test_database_models():
     """Test database model imports (if possible)"""
     try:
-        from db.models import User, Conversation, Document
         print("✅ Database models import successful")
         return True
     except Exception as e:

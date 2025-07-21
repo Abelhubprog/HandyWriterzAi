@@ -9,7 +9,7 @@ import asyncio
 import time
 import uuid
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 from langchain_core.messages import HumanMessage
 

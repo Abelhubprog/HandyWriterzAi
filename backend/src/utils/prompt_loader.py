@@ -8,7 +8,7 @@ with proper parameter substitution and validation.
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from string import Template
 
 logger = logging.getLogger(__name__)

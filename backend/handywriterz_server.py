@@ -4,10 +4,8 @@ HandyWriterz Backend Server - OpenWebUI Compatible
 Serves the SvelteKit frontend and provides HandyWriterz AI capabilities
 """
 
-import os
 import logging
 from pathlib import Path
-from typing import Dict, Any, List
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware

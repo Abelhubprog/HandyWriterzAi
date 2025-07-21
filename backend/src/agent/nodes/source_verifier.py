@@ -1,93 +1,77 @@
-
 import asyncio
-import httpx
-from agent.base import BaseNode
-from typing import Any
-from fuzzywuzzy import fuzz
+from typing import Dict, Any, List, Optional
+
+from .search_base import SearchResult
+from ..base import BaseNode
+from ..handywriterz_state import HandyWriterzState
 
 class SourceVerifier(BaseNode):
+    """
+    An agent that verifies the credibility, relevance, and accessibility of aggregated sources.
+    """
+
     def __init__(self):
-        super().__init__("source_verifier")
+        super().__init__("SourceVerifier")
+        self.min_credibility_score = 0.6
+        self.min_relevance_score = 0.5
 
-    async def execute(self, state: dict, config: Any) -> dict:
-        vetted = []
-        raw_hits = state.get("raw_hits", [])
-        tasks = [self.verify_one(hit, state.get("params", {})) for hit in raw_hits]
-        results = await asyncio.gather(*tasks)
-        for result in results:
-            if result:
-                vetted.append(result)
+    async def execute(self, state: HandyWriterzState, config: dict) -> Dict[str, Any]:
+        """
+        Executes the source verification process.
+        """
+        self.logger.info("Verifying aggregated sources...")
+        aggregated_sources = state.get("aggregated_sources", [])
         
-        state["sources"] = vetted
-        if len(vetted) < state.get("params", {}).get("min_sources", 3):
-            state["need_fallback"] = True
-        else:
-            state["need_fallback"] = False
-            
-        return state
+        if not aggregated_sources:
+            self.logger.warning("No sources to verify.")
+            return {"verified_sources": [], "need_fallback": True}
 
-    async def verify_one(self, hit: dict, params: dict) -> dict | None:
-        # Placeholder for Unpaywall/CrossRef enrichment
-        meta = await self.enrich(hit)
-        
-        if not self.is_design_ok(meta, params.get("design")):
-            return None
-            
-        if not self.is_year_ok(meta, params.get("year_from"), params.get("year_to")):
-            return None
+        verification_tasks = [self.verify_source(SearchResult(**source)) for source in aggregated_sources]
+        verified_results = await asyncio.gather(*verification_tasks)
 
-        is_live, url = await self.is_link_live(meta)
-        meta["is_live"] = is_live
-        meta["url"] = url
+        verified_sources = [source.to_dict() for source in verified_results if source is not None]
 
-        if not is_live:
-            return None
-            
-        return meta
+        self.logger.info(f"Verified {len(aggregated_sources)} sources, {len(verified_sources)} passed verification.")
 
-    async def enrich(self, hit: dict) -> dict:
-        # In a real implementation, this would call CrossRef and Unpaywall APIs
-        # For now, we'll just simulate it.
+        # Determine if fallback is needed
+        min_sources = state.get("user_params", {}).get("min_sources", 5)
+        need_fallback = len(verified_sources) < min_sources
+
         return {
-            "id": hit.get("id"),
-            "title": hit.get("title"),
-            "authors": hit.get("authors"),
-            "year": hit.get("year"),
-            "journal": hit.get("journal"),
-            "doi": hit.get("doi"),
-            "design": hit.get("design", "unknown"),
-            "url": hit.get("url"),
-            "impact": hit.get("impact", 0)
+            "verified_sources": verified_sources,
+            "need_fallback": need_fallback
         }
 
-    def is_design_ok(self, meta: dict, required_design: str | None) -> bool:
-        if not required_design:
-            return True
-        # Simple regex/keyword matching for now. Haiku fallback would be implemented here.
-        return required_design.lower() in meta.get("design", "").lower()
+    async def verify_source(self, source: SearchResult) -> Optional[SearchResult]:
+        """
+        Performs a multi-faceted verification of a single source.
+        """
+        # 1. Credibility Check
+        if source.credibility_score < self.min_credibility_score:
+            self.logger.debug(f"Source '{source.title}' failed credibility check ({source.credibility_score}).")
+            return None
 
-    def is_year_ok(self, meta: dict, year_from: int | None, year_to: int | None) -> bool:
-        pub_year = meta.get("year")
-        if not pub_year:
-            return False
-        if year_from and pub_year < year_from:
-            return False
-        if year_to and pub_year > year_to:
-            return False
-        return True
+        # 2. Relevance Check
+        if source.relevance_score < self.min_relevance_score:
+            self.logger.debug(f"Source '{source.title}' failed relevance check ({source.relevance_score}).")
+            return None
+            
+        # 3. Link Liveness Check (already partially handled by BaseSearchNode, but we can re-verify)
+        # This is a simplified check. A more robust implementation would handle various HTTP errors.
+        if not source.url:
+             self.logger.debug(f"Source '{source.title}' has no URL.")
+             return None
 
-    async def is_link_live(self, meta: dict) -> tuple[bool, str]:
-        url = meta.get("url")
-        if not url:
-            doi = meta.get("doi")
-            if not doi:
-                return False, ""
-            url = f"https://doi.org/{doi}"
+        # 4. Bias Detection (Placeholder for future implementation)
+        # bias_score = await self.detect_bias(source)
+        # if bias_score > 0.7:
+        #     return None
 
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.head(url, follow_redirects=True, timeout=5)
-            return 200 <= response.status_code < 400, str(response.url)
-        except httpx.RequestError:
-            return False, url
+        return source
 
+    async def detect_bias(self, source: SearchResult) -> float:
+        """
+        A placeholder for a future bias detection implementation.
+        This would involve analyzing the text for biased language, checking funding sources, etc.
+        """
+        return 0.0

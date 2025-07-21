@@ -7,13 +7,14 @@ Provides robust foundation for all search implementations.
 import asyncio
 import logging
 import time
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional
 from abc import ABC, abstractmethod
 import httpx
 from langchain_core.runnables import RunnableConfig
 
-from agent.base import BaseNode, NodeError
-from agent.handywriterz_state import HandyWriterzState
+from ..base import BaseNode, NodeError
+from ..handywriterz_state import HandyWriterzState
+from src.utils.file_utils import get_file_summary
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ class BaseSearchNode(BaseNode, ABC):
             # Build search query from state
             query = await self._build_search_query(state)
             if not query:
-                raise NodeError(f"Could not build search query from state", self.name)
+                raise NodeError("Could not build search query from state", self.name)
             
             self.logger.info(f"Search query: {query}")
             self._broadcast_progress(state, f"Searching for: {query[:100]}...")
@@ -160,11 +161,12 @@ class BaseSearchNode(BaseNode, ABC):
             }
     
     async def _build_search_query(self, state: HandyWriterzState) -> str:
-        """Build search query from state parameters."""
+        """Build search query from state parameters, including file context."""
         
         # Extract search parameters
         user_params = state.get("user_params", {})
         messages = state.get("messages", [])
+        uploaded_files = state.get("uploaded_files", [])
         
         # Get the main topic/question
         topic = ""
@@ -175,6 +177,12 @@ class BaseSearchNode(BaseNode, ABC):
         field = user_params.get("field", "")
         writeup_type = user_params.get("writeupType", "essay")
         
+        # --- Integrate File Context ---
+        file_context = ""
+        if uploaded_files:
+            file_summaries = [get_file_summary(file) for file in uploaded_files]
+            file_context = " ".join(file_summaries)
+
         # Build intelligent query
         query_parts = []
         
@@ -182,6 +190,10 @@ class BaseSearchNode(BaseNode, ABC):
             # Clean and extract key terms from topic
             topic_clean = self._extract_key_terms(topic)
             query_parts.append(topic_clean)
+
+        if file_context:
+            file_context_clean = self._extract_key_terms(file_context)
+            query_parts.append(file_context_clean)
         
         if field and field != "general":
             query_parts.append(field)

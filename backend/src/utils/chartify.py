@@ -1,5 +1,4 @@
 import asyncio
-from typing import Dict, Any
 from playwright.async_api import async_playwright
 
 async def create_chart_svg(data: str) -> str:

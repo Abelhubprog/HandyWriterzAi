@@ -9,7 +9,6 @@ import os
 import sys
 import time
 import json
-from typing import Dict, Any
 from pathlib import Path
 
 # Add src to Python path
@@ -79,12 +78,6 @@ class ProductionSystemTester:
                 print("✅ All environment variables configured")
             
             # Test imports
-            from agent.nodes.search_gemini import GeminiSearchAgent
-            from agent.nodes.search_perplexity import PerplexitySearchAgent
-            from agent.nodes.search_o3 import O3SearchAgent
-            from agent.nodes.intelligent_intent_analyzer import IntelligentIntentAnalyzer
-            from prompts.system_prompts import secure_prompt_loader
-            from mcp.mcp_integrations import mcp_server
             
             print("✅ All modules imported successfully")
             

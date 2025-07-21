@@ -3,15 +3,13 @@ Revolutionary Security Service for HandyWriterz.
 Production-ready authentication, authorization, input validation, and rate limiting.
 """
 
-import hashlib
-import hmac
 import json
 import logging
 import os
 import re
 import time
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, List, Set
+from datetime import datetime
+from typing import Dict, Any, List, Set
 from functools import wraps
 from dataclasses import dataclass
 
@@ -19,11 +17,8 @@ import jwt
 import redis.asyncio as redis
 from fastapi import Request, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, validator
-import bcrypt
 from cryptography.fernet import Fernet
 
-from services.error_handler import ErrorContext, ErrorCategory, ErrorSeverity, error_handler
 
 logger = logging.getLogger(__name__)
 

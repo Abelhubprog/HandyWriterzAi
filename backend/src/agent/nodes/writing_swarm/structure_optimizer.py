@@ -5,12 +5,12 @@ This micro-agent ensures that the generated content is well-organized
 and easy to follow, improving the overall structure of the academic paper.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
-from agent.base import BaseNode, NodeError
-from agent.handywriterz_state import HandyWriterzState
+from src.agent.base import BaseNode
+from ...handywriterz_state import HandyWriterzState
 
 class StructureOptimizerAgent(BaseNode):
     """

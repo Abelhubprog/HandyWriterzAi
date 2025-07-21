@@ -10,7 +10,6 @@ import json
 import inspect
 import time
 from pathlib import Path
-from typing import Dict, List, Any, Optional
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -199,7 +198,6 @@ class ProductionReadinessTest:
         
         # Test async support
         try:
-            import asyncio
             import inspect
             
             # Check if main functions are async
@@ -219,7 +217,6 @@ class ProductionReadinessTest:
         
         # Test error handling patterns
         try:
-            from agent.base import BaseNode, NodeError
             self.test_result("Error Handling", True, "Custom error classes defined")
         except Exception as e:
             self.test_result("Error Handling", False, f"Failed: {e}")
@@ -230,14 +227,12 @@ class ProductionReadinessTest:
         
         # Test security middleware
         try:
-            from middleware.security_middleware import security_middleware
             self.test_result("Security Middleware", True, "Security middleware available")
         except Exception as e:
             self.test_result("Security Middleware", False, f"Failed: {e}")
         
         # Test authentication
         try:
-            from services.security_service import security_service
             self.test_result("Authentication Service", True, "Security service available")
         except Exception as e:
             self.test_result("Authentication Service", False, f"Failed: {e}")
@@ -248,14 +243,12 @@ class ProductionReadinessTest:
         
         # Test models
         try:
-            from db.models import User, Conversation, Document
             self.test_result("Database Models", True, "Core models defined")
         except Exception as e:
             self.test_result("Database Models", False, f"Failed: {e}")
         
         # Test database manager
         try:
-            from db.database import DatabaseManager
             self.test_result("Database Manager", True, "Database manager available")
         except Exception as e:
             self.test_result("Database Manager", False, f"Failed: {e}")
@@ -291,8 +284,8 @@ class ProductionReadinessTest:
         
         print(f"   📊 Total agents: {total_agents}")
         print(f"   📊 Categories: {len(agent_categories)}")
-        print(f"   📊 Multi-agent system: ✅")
-        print(f"   📊 Swarm intelligence: ✅")
+        print("   📊 Multi-agent system: ✅")
+        print("   📊 Swarm intelligence: ✅")
     
     def test_production_requirements(self):
         """Test production requirements"""
@@ -373,20 +366,20 @@ class ProductionReadinessTest:
         
         # Architecture analysis
         arch = self.test_results["architecture_analysis"]
-        print(f"\n🏗️  Architecture Analysis:")
+        print("\n🏗️  Architecture Analysis:")
         print(f"   - Total Agents: {arch.get('total_agents', 0)}")
         print(f"   - Agent Categories: {arch.get('agent_categories', 0)}")
         print(f"   - Multi-Agent System: {'✅' if arch.get('multi_agent_system') else '❌'}")
         print(f"   - Swarm Intelligence: {'✅' if arch.get('swarm_intelligence') else '❌'}")
         
         # Detailed test results
-        print(f"\n📋 Detailed Test Results:")
+        print("\n📋 Detailed Test Results:")
         for test_name, result in self.test_results["test_details"].items():
             status = "✅" if result["passed"] else "❌"
             print(f"   {status} {test_name}: {result['details']}")
         
         # Production readiness assessment
-        print(f"\n🎯 Production Readiness Assessment:")
+        print("\n🎯 Production Readiness Assessment:")
         if score >= 90:
             print("   🟢 EXCELLENT - Ready for production deployment")
         elif score >= 75:
@@ -397,7 +390,7 @@ class ProductionReadinessTest:
             print("   🔴 POOR - Significant work needed")
         
         # Recommendations
-        print(f"\n💡 Recommendations:")
+        print("\n💡 Recommendations:")
         if failed > 0:
             print("   - Fix failing tests before deployment")
         if arch.get('total_agents', 0) > 20:
@@ -405,9 +398,9 @@ class ProductionReadinessTest:
         if score < 80:
             print("   - Improve error handling and testing")
         
-        print(f"   - Set up monitoring and alerting")
-        print(f"   - Configure production environment variables")
-        print(f"   - Implement proper logging and metrics")
+        print("   - Set up monitoring and alerting")
+        print("   - Configure production environment variables")
+        print("   - Implement proper logging and metrics")
         
         # Save report
         report_file = "production_readiness_report.json"

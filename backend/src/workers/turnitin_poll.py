@@ -7,10 +7,9 @@ import asyncio
 import json
 import logging
 from typing import Dict, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import aioredis
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_db
 from ..db.models import Job, JobStatus

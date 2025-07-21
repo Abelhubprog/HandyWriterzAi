@@ -12,18 +12,16 @@ import asyncio
 import psutil
 from typing import Dict, List, Optional, Any, Callable
 from datetime import datetime, timedelta
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from enum import Enum
-from functools import wraps
 
 import redis.asyncio as redis
 from fastapi import FastAPI, Request
 from starlette.responses import JSONResponse
 import httpx
 
-from services.database_service import database_service
-from services.production_llm_service import production_llm_service
-from services.error_handler import error_handler, ErrorCategory, ErrorSeverity, ErrorContext
+from src.services.database_service import database_service
+from src.services.production_llm_service import production_llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -779,7 +777,7 @@ def track_requests(health_monitor: AdvancedHealthMonitor):
             
             return response
             
-        except Exception as e:
+        except Exception:
             response_time = time.time() - start_time
             health_monitor.track_request(response_time, error=True)
             raise

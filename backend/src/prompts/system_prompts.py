@@ -15,6 +15,37 @@ from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
+def secure_prompt_loader(prompt_name: str) -> str:
+    """
+    Secure prompt loader for sophisticated multiagent system.
+    Returns comprehensive system prompts for various agent types.
+    """
+    # Import the comprehensive prompt system
+    try:
+        from .sophisticated_agent_prompts import get_comprehensive_agent_prompt
+        return get_comprehensive_agent_prompt(prompt_name)
+    except ImportError:
+        # Fallback to basic prompts if comprehensive system unavailable
+        basic_prompts = {
+            "gemini_search": """You are a sophisticated AI search agent specializing in academic research. 
+Your role is to find credible, peer-reviewed sources for complex academic writing tasks.
+Focus on recent publications (post-2015) and maintain high standards for source credibility.
+NEVER take shortcuts - conduct thorough research across multiple academic databases.""",
+            
+            "intent_analysis": """You are an advanced intent analysis agent for academic writing.
+Analyze user requests to determine complexity, required resources, and optimal workflow routing.
+Pay special attention to academic requirements like citation styles, word counts, and subject areas.
+Perform deep semantic analysis without shortcuts or superficial assessments.""",
+            
+            "enhanced_user_intent": """You are the Enhanced User Intent Analysis Agent, responsible for deep semantic analysis of complex academic requests. Analyze not just what users ask for, but what they truly need for academic excellence. Never take shortcuts in your analysis.""",
+            
+            "master_orchestrator": """You are the Master Orchestrator Agent, the strategic command center for sophisticated multiagent coordination. Optimize workflow for maximum academic excellence, not speed. Deploy full resources for complex requests.""",
+            
+            "default": """You are a sophisticated AI assistant focused on academic writing and research excellence. Maintain the highest standards without taking shortcuts."""
+        }
+        
+        return basic_prompts.get(prompt_name, basic_prompts["default"])
+
 class SystemPrompt(Base):
     __tablename__ = "system_prompts"
 

@@ -1,13 +1,11 @@
 """Slide Generator node for auto-slide and infographic creation."""
 
-import json
-import time
 import re
 from typing import Dict, Any, List
 from langchain_core.runnables import RunnableConfig
 
-from agent.base import BaseNode
-from agent.handywriterz_state import HandyWriterzState
+from src.agent.base import BaseNode
+from ...agent.handywriterz_state import HandyWriterzState
 
 
 class SlideGeneratorNode(BaseNode):
@@ -446,7 +444,6 @@ class SlideGeneratorNode(BaseNode):
     def _create_pptx_presentation(self, pptx_structure: Dict[str, Any]) -> str:
         """Create a .pptx presentation from the structured data."""
         from pptx import Presentation
-        from pptx.util import Inches
 
         prs = Presentation()
 

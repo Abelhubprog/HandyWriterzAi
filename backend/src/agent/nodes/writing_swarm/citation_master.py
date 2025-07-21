@@ -9,9 +9,9 @@ from typing import Dict, Any, List
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
-from agent.base import BaseNode, NodeError
-from agent.handywriterz_state import HandyWriterzState
-from tools.google_web_search import google_web_search
+from src.agent.base import BaseNode
+from ...handywriterz_state import HandyWriterzState
+from src.tools.google_web_search import google_web_search
 
 class CitationMasterAgent(BaseNode):
     """

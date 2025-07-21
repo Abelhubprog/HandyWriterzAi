@@ -1,7 +1,7 @@
 import os
 from typing import Dict, Any
 from langchain_community.chat_models import ChatDeepseek
-from agent.handywriterz_state import HandyWriterzState
+from ...agent.handywriterz_state import HandyWriterzState
 
 class DeepseekSearchAgent:
     """A search agent that uses Deepseek for technical and coding expertise."""

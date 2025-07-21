@@ -7,7 +7,7 @@ import asyncio
 import logging
 import time
 from enum import Enum
-from typing import Dict, Any, Optional, Callable, Type, Union, List
+from typing import Dict, Any, Optional, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import json
@@ -245,7 +245,7 @@ class RevolutionaryErrorHandler:
             
             return result
             
-        except Exception as e:
+        except Exception:
             # Operation failed
             breaker.failure_count += 1
             breaker.last_failure_time = datetime.utcnow()

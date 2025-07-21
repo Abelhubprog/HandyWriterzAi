@@ -3,13 +3,10 @@ Revolutionary Error Middleware for HandyWriterz.
 Production-ready error handling middleware with comprehensive error management.
 """
 
-import asyncio
-import json
 import logging
 import time
-import traceback
 import uuid
-from typing import Dict, Any, Optional, Callable, Union
+from typing import Dict, Any, Callable
 from datetime import datetime
 
 from fastapi import Request, Response, HTTPException, status
@@ -18,7 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from services.error_handler import (
+from src.services.error_handler import (
     error_handler, ErrorContext, ErrorCategory, ErrorSeverity
 )
 

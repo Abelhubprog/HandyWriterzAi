@@ -5,12 +5,12 @@ This micro-agent identifies and flags potential biases in the generated
 content, ensuring fairness and academic integrity.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
-from agent.base import BaseNode, NodeError
-from agent.handywriterz_state import HandyWriterzState
+from ...base import BaseNode
+from ...handywriterz_state import HandyWriterzState
 
 class BiasDetectionAgent(BaseNode):
     """
@@ -19,7 +19,7 @@ class BiasDetectionAgent(BaseNode):
 
     def __init__(self):
         super().__init__(name="BiasDetectionAgent")
-        self.llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+        self.llm = None  # Initialize lazily
 
     async def execute(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """

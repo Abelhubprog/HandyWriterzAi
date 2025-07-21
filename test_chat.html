@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HandyWriterz Chat Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+        .container {
+            background-color: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background-color: #3a3a3a;
+            color: #ffffff;
+            font-size: 14px;
+        }
+        button {
+            background-color: #0066cc;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background-color: #0052a3;
+        }
+        button:disabled {
+            background-color: #666;
+            cursor: not-allowed;
+        }
+        .response {
+            background-color: #1a2a1a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+        .error {
+            background-color: #2a1a1a;
+            border-color: #aa3333;
+            color: #ffaaaa;
+        }
+        select {
+            background-color: #3a3a3a;
+            color: #ffffff;
+            border: 1px solid #555;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 0 5px;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .status.connected {
+            background-color: #1a3a1a;
+            border: 1px solid #33aa33;
+            color: #aaffaa;
+        }
+        .status.disconnected {
+            background-color: #3a1a1a;
+            border: 1px solid #aa3333;
+            color: #ffaaaa;
+        }
+    </style>
+</head>
+<body>
+    <h1>HandyWriterz Chat Interface Test</h1>
+    
+    <div class="container">
+        <div id="backendStatus" class="status disconnected">
+            Backend Status: Checking...
+        </div>
+        
+        <div class="controls">
+            <label>Writing Mode:</label>
+            <select id="mode">
+                <option value="research">Research Paper</option>
+                <option value="essay">Essay</option>
+                <option value="report">Report</option>
+                <option value="thesis">Thesis</option>
+            </select>
+            
+            <label>Model:</label>
+            <select id="model">
+                <option value="gemini-pro">Gemini Pro</option>
+                <option value="gpt-4">GPT-4</option>
+                <option value="claude-3">Claude 3</option>
+            </select>
+            
+            <label>Word Count:</label>
+            <select id="wordCount">
+                <option value="500">500 words</option>
+                <option value="1000">1000 words</option>
+                <option value="2000" selected>2000 words</option>
+                <option value="3000">3000 words</option>
+                <option value="5000">5000 words</option>
+            </select>
+        </div>
+        
+        <textarea id="promptInput" placeholder="Enter your academic writing prompt here...
+
+Example: Write a comprehensive research paper on the impact of artificial intelligence on healthcare systems, focusing on diagnostic accuracy, patient outcomes, and ethical considerations. Include recent developments in machine learning applications in medical imaging and discuss the challenges of implementing AI in clinical practice."></textarea>
+        
+        <button onclick="testBackend()" id="testBtn">Test Backend Connection</button>
+        <button onclick="submitPrompt()" id="submitBtn" disabled>Submit Chat Request</button>
+        <button onclick="clearResponse()" id="clearBtn">Clear Response</button>
+    </div>
+    
+    <div class="container">
+        <h3>Response:</h3>
+        <div id="response" class="response">Ready to test...</div>
+    </div>
+
+    <script>
+        let backendConnected = false;
+        
+        async function testBackend() {
+            const statusDiv = document.getElementById('backendStatus');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            try {
+                statusDiv.textContent = 'Testing backend connection...';
+                statusDiv.className = 'status disconnected';
+                
+                const response = await fetch('http://localhost:8000/health');
+                if (response.ok) {
+                    const data = await response.json();
+                    statusDiv.textContent = `Backend Status: Connected (${data.status})`;
+                    statusDiv.className = 'status connected';
+                    backendConnected = true;
+                    submitBtn.disabled = false;
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                statusDiv.textContent = `Backend Status: Disconnected (${error.message})`;
+                statusDiv.className = 'status disconnected';
+                backendConnected = false;
+                submitBtn.disabled = true;
+            }
+        }
+        
+        async function submitPrompt() {
+            const prompt = document.getElementById('promptInput').value.trim();
+            const mode = document.getElementById('mode').value;
+            const model = document.getElementById('model').value;
+            const wordCount = parseInt(document.getElementById('wordCount').value);
+            const responseDiv = document.getElementById('response');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            if (!prompt) {
+                alert('Please enter a prompt');
+                return;
+            }
+            
+            if (!backendConnected) {
+                alert('Backend is not connected. Please test connection first.');
+                return;
+            }
+            
+            try {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Submitting...';
+                responseDiv.textContent = 'Sending request to backend...';
+                responseDiv.className = 'response';
+                
+                const payload = {
+                    messages: [
+                        {
+                            role: "user",
+                            content: prompt
+                        }
+                    ],
+                    model: model,
+                    stream: false
+                };
+                
+                const response = await fetch('http://localhost:8000/api/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                const responseText = await response.text();
+                console.log('Response text:', responseText);
+                
+                if (response.ok) {
+                    try {
+                        const data = JSON.parse(responseText);
+                        responseDiv.textContent = `Success! Response: ${JSON.stringify(data, null, 2)}`;
+                        responseDiv.className = 'response';
+                        
+                        if (data.trace_id) {
+                            responseDiv.textContent += `\n\nTrace ID: ${data.trace_id}\nYou can use this to track the request progress.`;
+                        }
+                    } catch (e) {
+                        responseDiv.textContent = `Success! Raw response: ${responseText}`;
+                        responseDiv.className = 'response';
+                    }
+                } else {
+                    responseDiv.textContent = `Error ${response.status}: ${responseText}`;
+                    responseDiv.className = 'response error';
+                }
+                
+            } catch (error) {
+                console.error('Request failed:', error);
+                responseDiv.textContent = `Request failed: ${error.message}`;
+                responseDiv.className = 'response error';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Chat Request';
+            }
+        }
+        
+        function clearResponse() {
+            document.getElementById('response').textContent = 'Ready to test...';
+            document.getElementById('response').className = 'response';
+        }
+        
+        // Test backend connection on page load
+        window.onload = function() {
+            testBackend();
+        };
+    </script>
+</body>
+</html>

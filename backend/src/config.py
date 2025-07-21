@@ -1,7 +1,5 @@
 """Production-ready configuration management for HandyWriterz backend."""
 
-import os
-import logging
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 from pathlib import Path
@@ -359,7 +357,8 @@ class HandyWriterzSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=False
+        case_sensitive=False,
+        extra="ignore"
     )
 
 

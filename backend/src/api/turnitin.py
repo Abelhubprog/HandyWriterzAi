@@ -4,17 +4,16 @@ FastAPI endpoints for Turnitin Checker workflow.
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func
+from sqlalchemy import and_, func
 
 from ..db.database import get_db
 from ..models.turnitin import (
-    DocLot, DocChunk, Checker, Submission, CheckerPayout, WalletEscrow,
-    ChunkStatus, PayoutStatus, CheckerStatus
+    DocChunk, Checker, Submission, CheckerPayout, ChunkStatus, PayoutStatus, CheckerStatus
 )
 
 router = APIRouter(prefix="/checker", tags=["turnitin"])

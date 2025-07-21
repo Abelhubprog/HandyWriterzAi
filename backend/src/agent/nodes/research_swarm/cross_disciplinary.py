@@ -10,8 +10,8 @@ from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 import arxiv
 
-from agent.base import BaseNode, NodeError
-from agent.handywriterz_state import HandyWriterzState
+from ...base import BaseNode
+from ...handywriterz_state import HandyWriterzState
 
 class CrossDisciplinaryAgent(BaseNode):
     """
@@ -20,13 +20,27 @@ class CrossDisciplinaryAgent(BaseNode):
 
     def __init__(self):
         super().__init__(name="CrossDisciplinaryAgent")
-        self.llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
-        self.arxiv_client = arxiv.Client()
+        self.llm = None  # Initialize lazily
+        self.arxiv_client = None  # Initialize lazily
 
     async def execute(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """
         Execute the cross-disciplinary research and synthesis.
         """
+        # Lazy initialization
+        if self.llm is None:
+            try:
+                self.llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize LLM: {e}")
+                return {"cross_disciplinary_analysis": {"status": "error", "message": "LLM unavailable"}}
+        
+        if self.arxiv_client is None:
+            try:
+                self.arxiv_client = arxiv.Client()
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize arXiv client: {e}")
+                return {"cross_disciplinary_analysis": {"status": "error", "message": "arXiv unavailable"}}
         self.logger.info("Initiating cross-disciplinary research.")
         self._broadcast_progress(state, "Exploring related academic disciplines...")
 

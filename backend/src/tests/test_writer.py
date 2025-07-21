@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from agent.nodes.writer import RevolutionaryWriterAgent
 from agent.handywriterz_state import HandyWriterzState
 

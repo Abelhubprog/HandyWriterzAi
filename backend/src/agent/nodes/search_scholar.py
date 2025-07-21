@@ -1,8 +1,8 @@
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any
 from unpaywall import UnpaywallClient
-from agent.base import BaseNode
-from agent.handywriterz_state import HandyWriterzState
+from src.agent.base import BaseNode
+from ...agent.handywriterz_state import HandyWriterzState
 
 class ScholarSearchAgent(BaseNode):
     """An agent that searches for scholarly articles using the Unpaywall API."""

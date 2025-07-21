@@ -3,11 +3,9 @@ Revolutionary Vector Storage Service with pgvector integration.
 Production-ready semantic search and vector similarity for academic sources.
 """
 
-import os
 import logging
-import numpy as np
 from typing import List, Dict, Any, Optional, Tuple
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float, func, text
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import UUID
 from pgvector.sqlalchemy import Vector

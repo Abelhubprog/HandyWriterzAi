@@ -1,9 +1,9 @@
 import logging
 import os
 import uuid
-from typing import List, Optional
+from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from tusclient import client as tus_client
 from tusclient.exceptions import TusCommunicationError
 

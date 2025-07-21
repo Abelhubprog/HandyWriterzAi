@@ -5,10 +5,8 @@ Deep test of agent structure and functionality
 
 import os
 import sys
-import json
 import inspect
 from pathlib import Path
-from typing import Dict, List, Any
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -320,10 +318,10 @@ def main():
     print("\n📝 Agent Architecture Summary:")
     print(f"   - Multi-agent system with {sum(len(agents) for agents in agent_network.values())} total agents")
     print(f"   - {len(agent_network)} categories of specialized agents")
-    print(f"   - Orchestration layer with intelligent routing")
-    print(f"   - Swarm intelligence capabilities")
-    print(f"   - Quality assurance pipeline")
-    print(f"   - Academic writing specialization")
+    print("   - Orchestration layer with intelligent routing")
+    print("   - Swarm intelligence capabilities")
+    print("   - Quality assurance pipeline")
+    print("   - Academic writing specialization")
     
     if passed >= total * 0.75:
         print("🎉 System architecture is well-structured and ready for deployment!")

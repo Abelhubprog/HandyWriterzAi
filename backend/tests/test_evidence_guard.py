@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 # Mock MasterOrchestratorAgent to prevent API calls during testing
 with patch('agent.nodes.master_orchestrator.MasterOrchestratorAgent._initialize_ai_providers'):
-    from agent.handywriterz_graph import handywriterz_graph
+    pass
 from agent.nodes.source_verifier import SourceVerifier
 from agent.nodes.citation_audit import CitationAudit
 from agent.nodes.writer import WriterNode

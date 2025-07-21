@@ -7,20 +7,18 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple
+from datetime import datetime
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from enum import Enum
 
 import redis.asyncio as redis
-from sqlalchemy.orm import Session
 
 from db.database import get_database
-from db.models import DocChunk, DocLot, Submission, ChunkStatus
+from db.models import DocChunk, ChunkStatus
 from agent.nodes.rewrite_o3 import O3RewriteAgent
-from services.telegram_gateway import telegram_gateway, submit_to_turnitin, get_turnitin_status
-from services.highlight_parser import highlight_parser, parse_turnitin_reports
-from services.notification_service import notification_service, NotificationType
+from src.services.telegram_gateway import submit_to_turnitin, get_turnitin_status
+from src.services.highlight_parser import parse_turnitin_reports
 
 
 class RewriteStage(Enum):

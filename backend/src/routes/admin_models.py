@@ -10,8 +10,8 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 
-from services.model_service import get_model_service
-from services.security_service import require_authorization
+from src.services.model_service import get_model_service
+from src.services.security_service import require_authorization
 
 logger = logging.getLogger(__name__)
 

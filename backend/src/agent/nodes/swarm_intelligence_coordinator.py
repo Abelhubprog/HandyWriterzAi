@@ -17,23 +17,23 @@ from enum import Enum
 from collections import defaultdict
 from langchain_core.runnables import RunnableConfig
 
-from agent.base import BaseNode, NodeError
-from agent.handywriterz_state import HandyWriterzState
-from agent.nodes.research_swarm.arxiv_specialist import ArxivSpecialistAgent
-from agent.nodes.research_swarm.scholar_network import ScholarNetworkAgent
-from agent.nodes.research_swarm.trend_analysis import TrendAnalysisAgent
-from agent.nodes.research_swarm.methodology_expert import MethodologyExpertAgent
-from agent.nodes.research_swarm.cross_disciplinary import CrossDisciplinaryAgent
-from agent.nodes.qa_swarm.bias_detection import BiasDetectionAgent
-from agent.nodes.qa_swarm.fact_checking import FactCheckingAgent
-from agent.nodes.qa_swarm.argument_validation import ArgumentValidationAgent
-from agent.nodes.qa_swarm.ethical_reasoning import EthicalReasoningAgent
-from agent.nodes.qa_swarm.originality_guard import OriginalityGuardAgent
-from agent.nodes.writing_swarm.style_adaptation import StyleAdaptationAgent
-from agent.nodes.writing_swarm.citation_master import CitationMasterAgent
-from agent.nodes.writing_swarm.structure_optimizer import StructureOptimizerAgent
-from agent.nodes.writing_swarm.clarity_enhancer import ClarityEnhancerAgent
-from agent.nodes.writing_swarm.academic_tone import AcademicToneAgent
+from ..base import BaseNode
+from ..handywriterz_state import HandyWriterzState
+from .research_swarm.arxiv_specialist import ArxivSpecialistAgent
+from .research_swarm.scholar_network import ScholarNetworkAgent
+from .research_swarm.trend_analysis import TrendAnalysisAgent
+from .research_swarm.methodology_expert import MethodologyExpertAgent
+from .research_swarm.cross_disciplinary import CrossDisciplinaryAgent
+from .qa_swarm.bias_detection import BiasDetectionAgent
+from .qa_swarm.fact_checking import FactCheckingAgent
+from .qa_swarm.argument_validation import ArgumentValidationAgent
+from .qa_swarm.ethical_reasoning import EthicalReasoningAgent
+from .qa_swarm.originality_guard import OriginalityGuardAgent
+from .writing_swarm.style_adaptation import StyleAdaptationAgent
+from .writing_swarm.citation_master import CitationMasterAgent
+from .writing_swarm.structure_optimizer import StructureOptimizerAgent
+from .writing_swarm.clarity_enhancer import ClarityEnhancerAgent
+from .writing_swarm.academic_tone import AcademicToneAgent
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,6 @@ import os
 import asyncio
 import json
 import time
-from typing import Dict, Any, List
 from dataclasses import asdict
 
 # Add src to path
@@ -137,8 +136,7 @@ class AgentWorkflowTester:
         self.results["tests_run"] += 1
         
         try:
-            from db.models import User, Conversation, Document, UserType, WorkflowStatus
-            from db.database import DatabaseManager
+            from db.models import User, UserType
             
             # Test model creation
             test_user = User(
@@ -443,7 +441,7 @@ class AgentWorkflowTester:
         print(f"Success Rate: {(passed / total_tests * 100):.1f}%")
         
         if failed > 0:
-            print(f"\n💥 Failed Tests:")
+            print("\n💥 Failed Tests:")
             for failure in self.results["failures"]:
                 print(f"  - {failure['test']}: {failure['error']}")
         

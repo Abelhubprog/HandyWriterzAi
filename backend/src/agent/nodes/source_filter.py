@@ -1,6 +1,5 @@
 """Source Filter node for evidence validation and hover card data storage."""
 
-import asyncio
 import json
 import time
 import redis.asyncio as redis
@@ -8,9 +7,8 @@ from typing import Dict, Any, List, Optional
 from langchain_core.runnables import RunnableConfig
 from datetime import datetime
 
-from agent.base import BaseNode, NodeError
-from agent.handywriterz_state import HandyWriterzState
-from agent.nodes.search_base import SearchResult
+from src.agent.base import BaseNode, NodeError
+from ...agent.handywriterz_state import HandyWriterzState
 
 
 class SourceFilterNode(BaseNode):
@@ -638,7 +636,6 @@ class SourceFilterNode(BaseNode):
     
     def _extract_advanced_key_phrases(self, paragraph: str) -> List[str]:
         """Extract advanced key phrases for academic content."""
-        import re
         
         phrases = []
         paragraph_lower = paragraph.lower()

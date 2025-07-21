@@ -1,7 +1,6 @@
-from fastapi import Request, HTTPException
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
-from typing import Dict, Any
+from typing import Dict
 
 def select_model(job_size: int, quality_threshold: str) -> Dict[str, str]:
     """

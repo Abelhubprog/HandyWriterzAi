@@ -1,7 +1,7 @@
 from typing import Dict, Any
-from agent.base import BaseNode
-from agent.handywriterz_state import HandyWriterzState
-from services.supabase_service import SupabaseService
+from ..base import BaseNode
+from ..handywriterz_state import HandyWriterzState
+from src.services.supabase_service import SupabaseService
 
 class MemoryRetrieverNode(BaseNode):
     """A node that retrieves a user's long-term memory from Supabase."""

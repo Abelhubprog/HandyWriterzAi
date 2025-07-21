@@ -4,18 +4,14 @@ Processes Turnitin similarity and AI detection reports to extract flagged text s
 """
 
 import asyncio
-import json
 import logging
 import os
-import tempfile
 import time
-from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 from enum import Enum
 import re
 
-import aiofiles
 import redis.asyncio as redis
 
 
@@ -250,7 +246,7 @@ class HighlightParser:
             
             similarity_report, ai_report = await asyncio.gather(similarity_task, ai_task)
             
-            self.logger.info(f"✅ Both reports parsed successfully")
+            self.logger.info("✅ Both reports parsed successfully")
             
             return similarity_report, ai_report
             

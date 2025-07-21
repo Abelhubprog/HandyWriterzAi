@@ -1,14 +1,13 @@
 import json
 from datetime import datetime
 from typing import Dict, Any
-import numpy as np
 from opentelemetry import trace
 
 tracer = trace.get_tracer(__name__)
 
-from agent.base import BaseNode
-from agent.handywriterz_state import HandyWriterzState
-from services.supabase_service import get_supabase_client
+from ..base import BaseNode
+from ..handywriterz_state import HandyWriterzState
+from src.services.supabase_service import get_supabase_client
 
 class MemoryWriter(BaseNode):
     """

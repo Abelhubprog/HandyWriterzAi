@@ -1,3 +1,3 @@
 packages:
-  - 'frontend/nextjs-app'
+  - 'frontend'
   - 'backend' # Assuming backend might become a package

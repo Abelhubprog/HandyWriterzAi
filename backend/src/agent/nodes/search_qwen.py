@@ -1,7 +1,7 @@
 import os
 from typing import Dict, Any
 from langchain_community.chat_models import ChatQwen
-from agent.handywriterz_state import HandyWriterzState
+from ...agent.handywriterz_state import HandyWriterzState
 
 class QwenSearchAgent:
     """A search agent that uses Qwen for multilingual capabilities."""

@@ -4,10 +4,10 @@ from opentelemetry import trace
 tracer = trace.get_tracer(__name__)
 from typing import Dict, Any
 
-from agent.base import BaseNode
-from agent.handywriterz_state import HandyWriterzState
+from src.agent.base import BaseNode
+from ...agent.handywriterz_state import HandyWriterzState
 from utils.chartify import create_chart_svg
-from services.llm_service import get_llm_client
+from src.services.llm_service import get_llm_client
 
 class Derivatives(BaseNode):
     """

@@ -5,12 +5,12 @@ This micro-agent analyzes and evaluates research methodologies from
 academic papers, ensuring the generated content is methodologically sound.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
-from agent.base import BaseNode, NodeError
-from agent.handywriterz_state import HandyWriterzState
+from ...base import BaseNode
+from ...handywriterz_state import HandyWriterzState
 
 class MethodologyExpertAgent(BaseNode):
     """
@@ -19,12 +19,21 @@ class MethodologyExpertAgent(BaseNode):
 
     def __init__(self):
         super().__init__(name="MethodologyExpertAgent")
-        self.llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+        self.llm = None  # Initialize lazily to avoid startup failures
 
     async def execute(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """
         Execute the methodology analysis.
         """
+        # Lazy initialization of LLM
+        if self.llm is None:
+            try:
+                from langchain_openai import ChatOpenAI
+                self.llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize OpenAI LLM: {e}")
+                return {"methodology_analysis": {"status": "error", "message": "LLM initialization failed"}}
+        
         self.logger.info("Initiating methodology analysis.")
         self._broadcast_progress(state, "Analyzing research methodologies...")
 

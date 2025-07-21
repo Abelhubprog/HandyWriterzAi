@@ -1,7 +1,7 @@
 
 from typing import Any
 import re
-from agent.base import BaseNode
+from src.agent.base import BaseNode
 
 class CitationAudit(BaseNode):
     def __init__(self):

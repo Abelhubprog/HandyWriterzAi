@@ -1,6 +1,5 @@
 import asyncio
-from telethon import TelegramClient, events, filters
-from telethon.tl.custom import Conversation
+from telethon import TelegramClient, events
 import os
 
 # TODO: Move these to a proper config management system

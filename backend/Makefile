@@ -16,7 +16,7 @@ test_profile:
 	uv run --with-editable . pytest -vv tests/unit_tests/ --profile-svg
 
 extended_tests:
-	uv run --with-editable . pytest --only-extended $(TEST_FILE)
+	pip install -r requirements.txt && pytest --only-extended $(TEST_FILE)
 
 
 ######################
@@ -33,15 +33,15 @@ lint_tests: PYTHON_FILES=tests
 lint_tests: MYPY_CACHE=.mypy_cache_test
 
 lint lint_diff lint_package lint_tests:
-	uv run ruff check .
-	[ "$(PYTHON_FILES)" = "" ] || uv run ruff format $(PYTHON_FILES) --diff
-	[ "$(PYTHON_FILES)" = "" ] || uv run ruff check --select I $(PYTHON_FILES)
-	[ "$(PYTHON_FILES)" = "" ] || uv run mypy --strict $(PYTHON_FILES)
-	[ "$(PYTHON_FILES)" = "" ] || mkdir -p $(MYPY_CACHE) && uv run mypy --strict $(PYTHON_FILES) --cache-dir $(MYPY_CACHE)
+	pip install -r requirements.txt && ruff check .
+	[ "$(PYTHON_FILES)" = "" ] || pip install -r requirements.txt && ruff format $(PYTHON_FILES) --diff
+	[ "$(PYTHON_FILES)" = "" ] || pip install -r requirements.txt && ruff check --select I $(PYTHON_FILES)
+	[ "$(PYTHON_FILES)" = "" ] || pip install -r requirements.txt && mypy --strict $(PYTHON_FILES)
+	[ "$(PYTHON_FILES)" = "" ] || mkdir -p $(MYPY_CACHE) && pip install -r requirements.txt && mypy --strict $(PYTHON_FILES) --cache-dir $(MYPY_CACHE)
 
 format format_diff:
-	uv run ruff format $(PYTHON_FILES)
-	uv run ruff check --select I --fix $(PYTHON_FILES)
+	pip install -r requirements.txt && ruff format $(PYTHON_FILES)
+	pip install -r requirements.txt && ruff check --select I --fix $(PYTHON_FILES)
 
 spell_check:
 	codespell --toml pyproject.toml

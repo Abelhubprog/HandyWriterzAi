@@ -6,16 +6,13 @@ Handles all external notification systems for the Turnitin Workbench.
 import asyncio
 import json
 import logging
-import os
 import time
-from datetime import datetime
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from enum import Enum
 
 import aiohttp
 import redis.asyncio as redis
-from sqlalchemy.orm import Session
 
 from db.database import get_database
 from db.models import Checker

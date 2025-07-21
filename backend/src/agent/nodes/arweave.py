@@ -1,6 +1,6 @@
 from typing import Dict, Any
-from agent.base import BaseNode
-from agent.handywriterz_state import HandyWriterzState
+from src.agent.base import BaseNode
+from ...agent.handywriterz_state import HandyWriterzState
 from utils.arweave import upload_to_arweave
 
 class Arweave(BaseNode):

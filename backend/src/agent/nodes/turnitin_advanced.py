@@ -10,18 +10,13 @@ from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 from enum import Enum
-import re
 
 from langchain_core.runnables import RunnableConfig
 import aiohttp
-import subprocess
-from fpdf import FPDF
 import docx
-from docx.shared import RGBColor, Inches
-from docx.enum.text import WD_COLOR_INDEX
 
-from agent.base import BaseNode, TurnitinReport
-from agent.handywriterz_state import HandyWriterzState
+from ..base import BaseNode
+from ..handywriterz_state import HandyWriterzState
 
 logger = logging.getLogger(__name__)
 

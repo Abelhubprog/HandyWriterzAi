@@ -1,7 +1,7 @@
 import os
 from typing import Dict, Any
 from langchain_community.chat_models import ChatGrok
-from agent.handywriterz_state import HandyWriterzState
+from ...agent.handywriterz_state import HandyWriterzState
 
 class GrokSearchAgent:
     """A search agent that uses Grok for real-time information and social context."""

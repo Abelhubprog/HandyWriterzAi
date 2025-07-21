@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any, List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from ..services.security_service import get_current_user

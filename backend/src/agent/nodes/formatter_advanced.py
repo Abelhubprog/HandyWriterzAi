@@ -1,33 +1,22 @@
 """Revolutionary Document Formatter with Advanced Academic Standards and Multi-format Excellence."""
 
-import asyncio
 import logging
 import os
-import json
 import tempfile
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from enum import Enum
-import re
 
 from langchain_core.runnables import RunnableConfig
 import docx
-from docx.shared import Inches, Pt, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
+from docx.shared import Inches, Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.style import WD_STYLE_TYPE
-from docx.oxml.shared import OxmlElement, qn
 from fpdf import FPDF
-import markdown
-from weasyprint import HTML, CSS
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.lib.colors import HexColor
 
-from agent.base import BaseNode
-from agent.handywriterz_state import HandyWriterzState
+from ..base import BaseNode
+from ..handywriterz_state import HandyWriterzState
 
 logger = logging.getLogger(__name__)
 

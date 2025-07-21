@@ -3,7 +3,7 @@
 import os
 import logging
 from typing import Generator, Optional
-from sqlalchemy import create_engine, MetaData
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import StaticPool
@@ -11,7 +11,7 @@ from contextlib import contextmanager
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
-from .models import Base, User, Conversation, Document, UserFingerprint, SourceCache, SystemMetrics
+from .models import Base, User, Conversation, Document
 
 logger = logging.getLogger(__name__)
 

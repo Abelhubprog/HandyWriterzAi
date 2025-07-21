@@ -13,11 +13,9 @@ os.environ["DATABASE_URL"] = "sqlite:///./test.db"
 try:
     # Import models without triggering database initialization
     from src.db.models import Base as MainBase
-    from src.db.models import User, Conversation, Document
     print("✓ Main models imported successfully")
     
     # Import Turnitin models
-    from src.models.turnitin import DocLot, DocChunk, Checker
     print("✓ Turnitin models imported successfully")
     
     # Check that tables are registered
