@@ -3,8 +3,15 @@ node_modules/
 frontend/dist/
 frontend/.vite/
 frontend/coverage/
+frontend/.next/
+frontend/out/
 .DS_Store
 *.local
+
+# Next.js build artifacts (CRITICAL: Prevents large files in Git)
+.next/
+out/
+build/
 
 # Logs
 logs
