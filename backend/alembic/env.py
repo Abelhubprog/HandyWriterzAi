@@ -34,18 +34,28 @@ if config.config_file_name is not None:
 # Use the imported Base metadata
 target_metadata = src.db.models.Base.metadata
 
-# Override sqlalchemy.url with environment variable
+# Override sqlalchemy.url with environment variable (Railway compatible)
 database_url = os.getenv("DATABASE_URL")
 if database_url:
-    # Handle postgres:// to postgresql:// conversion
+    # Handle postgres:// to postgresql:// conversion (Railway/Heroku compatibility)
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
     config.set_main_option("sqlalchemy.url", database_url)
 else:
-    # Fallback to development database if no env var
-    # Use an absolute path to avoid ambiguity
-    db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "handywriterz.db"))
-    config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    # Railway provides individual PostgreSQL variables if DATABASE_URL not available
+    pg_host = os.getenv("PGHOST")
+    pg_port = os.getenv("PGPORT", "5432")
+    pg_user = os.getenv("PGUSER", "postgres")
+    pg_password = os.getenv("PGPASSWORD", "")
+    pg_database = os.getenv("PGDATABASE", "railway")
+    
+    if pg_host and pg_user and pg_password and pg_database:
+        database_url = f"postgresql://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_database}"
+        config.set_main_option("sqlalchemy.url", database_url)
+    else:
+        # Fallback to development database if no env vars
+        db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "handywriterz.db"))
+        config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
 
 
 def run_migrations_offline() -> None:

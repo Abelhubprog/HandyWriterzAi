@@ -1,0 +1,16 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "backend/Dockerfile.railway"
+
+[deploy]
+numReplicas = 1
+sleepApplication = false
+restartPolicyType = "ON_FAILURE"
+
+[env]
+PORT = "8000"
+PYTHONUNBUFFERED = "1"
+TORCH_CPU_ONLY = "true"
+OMP_NUM_THREADS = "2"
+MKL_NUM_THREADS = "2"
+CUDA_VISIBLE_DEVICES = ""

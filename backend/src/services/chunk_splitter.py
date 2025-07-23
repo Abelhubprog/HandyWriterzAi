@@ -147,6 +147,14 @@ class ChunkSplitter:
                 async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
                     document_content = await f.read()
                 chunks = await self._execute_split(document_content, SplitStrategy.PARAGRAPH_BOUNDARY, lot_id)
+            elif file_type in ['mp3', 'wav', 'mp4a', 'flac', 'aac', 'm4a']:
+                # Audio files - use Whisper transcription
+                document_content = await self._extract_audio_transcription(file_path)
+                chunks = await self._execute_split(document_content, SplitStrategy.PARAGRAPH_BOUNDARY, lot_id)
+            elif file_type in ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv']:
+                # Video files - use Gemini 2.5 Pro analysis
+                document_content = await self._extract_video_content(file_path)
+                chunks = await self._execute_split(document_content, SplitStrategy.PARAGRAPH_BOUNDARY, lot_id)
             else:
                 raise ValueError(f"Unsupported file type: {file_type}")
 
@@ -208,6 +216,125 @@ class ChunkSplitter:
             self.logger.error(f"Failed to extract text with agentic-doc for {file_path}: {e}")
             # As a fallback, you could implement a simpler extraction method here if needed.
             raise
+
+    async def _extract_audio_transcription(self, file_path: str) -> str:
+        """Extract transcription from audio files using Whisper API."""
+        try:
+            import openai
+            from pathlib import Path
+            
+            # Initialize OpenAI client for Whisper
+            client = openai.OpenAI()
+            
+            self.logger.info(f"🎵 Starting audio transcription for {file_path}")
+            
+            # Read audio file
+            with open(file_path, "rb") as audio_file:
+                transcript = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    response_format="verbose_json",
+                    timestamp_granularities=["word", "segment"]
+                )
+            
+            # Format transcription with timestamps for better context preservation
+            formatted_text = f"Audio Transcription from {Path(file_path).name}:\n\n"
+            
+            if hasattr(transcript, 'segments') and transcript.segments:
+                for segment in transcript.segments:
+                    start_time = segment.get('start', 0)
+                    end_time = segment.get('end', 0)
+                    text = segment.get('text', '').strip()
+                    
+                    if text:
+                        # Format as: [MM:SS] Speaker content
+                        start_min = int(start_time // 60)
+                        start_sec = int(start_time % 60)
+                        formatted_text += f"[{start_min:02d}:{start_sec:02d}] {text}\n"
+            else:
+                # Fallback to simple text if segments aren't available
+                formatted_text += transcript.text
+                
+            self.logger.info(f"✅ Audio transcription completed: {len(formatted_text)} characters")
+            return formatted_text
+            
+        except Exception as e:
+            self.logger.error(f"Failed to transcribe audio {file_path}: {e}")
+            # Return a placeholder that indicates processing attempted
+            return f"[Audio file: {Path(file_path).name} - Transcription failed: {str(e)}]"
+
+    async def _extract_video_content(self, file_path: str) -> str:
+        """Extract content from video files using Gemini 2.5 Pro multimodal capabilities."""
+        try:
+            import google.generativeai as genai
+            from pathlib import Path
+            import os
+            
+            # Configure Gemini API
+            genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+            model = genai.GenerativeModel('gemini-2.5-pro')
+            
+            self.logger.info(f"🎬 Starting video analysis for {file_path}")
+            
+            # Upload video file to Gemini
+            video_file = genai.upload_file(path=file_path)
+            
+            # Wait for processing to complete
+            import time
+            while video_file.state.name == "PROCESSING":
+                self.logger.info("⏳ Video processing in progress...")
+                await asyncio.sleep(5)
+                video_file = genai.get_file(video_file.name)
+            
+            if video_file.state.name == "FAILED":
+                raise ValueError(f"Video processing failed: {video_file.state}")
+            
+            # Create sophisticated prompt for academic content extraction
+            prompt = """
+            Analyze this video comprehensively for academic research purposes. Extract and provide:
+
+            1. **Visual Content Analysis:**
+               - Key slides, charts, diagrams, or visual elements shown
+               - Text visible in presentations or documents
+               - Important visual data or statistics displayed
+
+            2. **Audio Transcription:**
+               - Complete transcription of all spoken content
+               - Speaker identification if multiple speakers
+               - Technical terminology and key concepts mentioned
+
+            3. **Academic Content Structure:**
+               - Main topics and themes discussed
+               - Arguments, evidence, or data presented  
+               - Methodology or research approaches mentioned
+               - Key citations or references mentioned
+
+            4. **Contextual Information:**
+               - Setting or context of the video (lecture, interview, presentation, etc.)
+               - Academic discipline or field of study
+               - Level of content (undergraduate, graduate, research-level)
+
+            Please provide a structured, detailed analysis that would be valuable for academic research and citation purposes.
+            Format the response with clear headings and preserve important technical details.
+            """
+            
+            # Generate content analysis
+            response = model.generate_content([video_file, prompt])
+            
+            # Format the response with metadata
+            formatted_content = f"Video Analysis from {Path(file_path).name}:\n\n"
+            formatted_content += response.text
+            
+            # Clean up uploaded file
+            genai.delete_file(video_file.name)
+            
+            self.logger.info(f"✅ Video analysis completed: {len(formatted_content)} characters")
+            return formatted_content
+            
+        except Exception as e:
+            self.logger.error(f"Failed to analyze video {file_path}: {e}")
+            # Return a placeholder that indicates processing attempted
+            return f"[Video file: {Path(file_path).name} - Analysis failed: {str(e)}]"
 
     async def _split_pdf(self, file_path: str, lot_id: str) -> List[DocumentChunk]:
         """Split PDF into chunks."""

@@ -1,12 +1,65 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: false, // Disable for faster dev builds
+  // Performance optimizations for faster dev builds
+  reactStrictMode: false,
+  swcMinify: true,
+  
+  // Enable standalone output for Railway deployment
+  output: 'standalone',
+  
+  // Reduce bundle analysis and optimization overhead in development
+  productionBrowserSourceMaps: false,
+  
+  // Experimental features for performance
   experimental: {
-    optimizePackageImports: ['@radix-ui/react-icons', 'lucide-react'],
+    optimizePackageImports: [
+      'lucide-react',
+      '@radix-ui/react-icons',
+      'framer-motion'
+    ],
+    // Enable Turbopack for faster builds (Next.js 14+)
+    turbo: {
+      rules: {
+        '*.svg': {
+          loaders: ['@svgr/webpack'],
+          as: '*.js',
+        },
+      },
+    },
+    // Reduce memory usage
+    workerThreads: false,
+    esmExternals: true,
   },
+
+  // Transpile packages that need it
+  transpilePackages: [
+    '@dynamic-labs/sdk-react-core',
+    '@dynamic-labs/ethereum', 
+    '@dynamic-labs/solana',
+    '@langchain/langgraph-sdk'
+  ],
+
+  // Webpack optimizations
   webpack: (config, { isServer, dev }) => {
-    // Only apply heavy polyfills in production
-    if (!dev) {
+    // Development-specific optimizations
+    if (dev) {
+      // Reduce module resolution complexity
+      config.resolve.symlinks = false;
+      
+      // Faster development builds
+      config.optimization = {
+        ...config.optimization,
+        removeAvailableModules: false,
+        removeEmptyChunks: false,
+        splitChunks: false,
+      };
+      
+      // Disable source maps in development for speed
+      config.devtool = false;
+    }
+
+    // Handle Node.js polyfills only in production
+    if (!dev && !isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
@@ -24,36 +77,28 @@ const nextConfig = {
       };
     }
 
-    // Handle pino-pretty optional dependency
-    config.externals = config.externals || [];
+    // Externalize heavy dependencies in browser
     if (!isServer) {
-      config.externals.push('pino-pretty');
-    }
-
-    // Optimize for development
-    if (dev) {
-      config.optimization = {
-        ...config.optimization,
-        splitChunks: {
-          chunks: 'all',
-          cacheGroups: {
-            vendor: {
-              test: /[\\/]node_modules[\\/]/,
-              name: 'vendors',
-              chunks: 'all',
-            },
-          },
-        },
-      };
+      config.externals = config.externals || [];
+      config.externals.push('pino-pretty', 'encoding');
     }
 
     return config;
   },
-  transpilePackages: [
-    '@dynamic-labs/sdk-react-core',
-    '@dynamic-labs/ethereum',
-    '@dynamic-labs/solana',
-  ],
+
+  // Headers for development CORS
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET,POST,PUT,DELETE,OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization' },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

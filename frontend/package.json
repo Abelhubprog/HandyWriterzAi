@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node dev-optimized.js",
     "dev:turbo": "next dev --turbopack",
     "dev:fast": "node dev-fast.js",
+    "dev:original": "next dev",
     "build": "next build",
+    "build:analyze": "ANALYZE=true next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint --fix",
+    "clean": "rm -rf .next && rm -rf node_modules/.cache"
   },
   "dependencies": {
     "@dynamic-labs/ethereum": "^3.9.13",

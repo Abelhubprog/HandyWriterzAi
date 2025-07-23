@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { ErrorBoundary } from "react-error-boundary";
 import { Button } from "@/components/ui/button";
 import { SquarePen, Brain, Send, StopCircle, Zap, Cpu, Paperclip, X, Plus, ArrowUp, Camera, FolderOpen, Settings, Mic, ScreenShare } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,7 +28,7 @@ interface InputFormProps {
   hasHistory: boolean;
 }
 
-export const InputForm: React.FC<InputFormProps> = ({
+const InputFormComponent: React.FC<InputFormProps> = ({
   onSubmit,
   onCancel,
   isLoading,
@@ -96,7 +97,8 @@ export const InputForm: React.FC<InputFormProps> = ({
         canvas.toBlob((blob) => {
           if (blob) {
             const file = new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' });
-            setFiles(prev => [...prev, file]);
+            // This would need integration with file upload system
+            console.log('Screenshot captured:', file);
           }
         }, 'image/png');
         
@@ -132,7 +134,8 @@ export const InputForm: React.FC<InputFormProps> = ({
         canvas.toBlob((blob) => {
           if (blob) {
             const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
-            setFiles(prev => [...prev, file]);
+            // This would need integration with file upload system
+            console.log('Photo captured:', file);
           }
         }, 'image/jpeg');
         
@@ -266,12 +269,18 @@ export const InputForm: React.FC<InputFormProps> = ({
   );
 };
 
-export const InputForm = withErrorBoundary(InputFormComponent, {
-  fallback: (
-    <div className="w-full max-w-4xl mx-auto p-6">
-      <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-center">
-        <p className="text-red-400">Failed to load input form. Please refresh the page.</p>
-      </div>
+// Error fallback component
+const ErrorFallback: React.FC = () => (
+  <div className="w-full max-w-4xl mx-auto p-6">
+    <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-center">
+      <p className="text-red-400">Failed to load input form. Please refresh the page.</p>
     </div>
-  ),
-});
+  </div>
+);
+
+// Export wrapped component
+export const InputForm: React.FC<InputFormProps> = (props) => (
+  <ErrorBoundary FallbackComponent={ErrorFallback}>
+    <InputFormComponent {...props} />
+  </ErrorBoundary>
+);

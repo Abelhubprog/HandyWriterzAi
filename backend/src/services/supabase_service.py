@@ -1,50 +1,50 @@
 import os
-from supabase import create_client, Client
+import logging
+from typing import Dict, Any, Optional
+
+# Import Railway service as replacement for Supabase
+from .railway_db_service import get_railway_service, get_railway_client
+
+logger = logging.getLogger(__name__)
 
 class SupabaseService:
-    """A service for interacting with Supabase."""
+    """A service for interacting with database (now uses Railway PostgreSQL)."""
 
     def __init__(self):
-        url: str = os.environ.get("SUPABASE_URL")
-        key: str = os.environ.get("SUPABASE_KEY")
-        if not url or not key:
-            raise ValueError("SUPABASE_URL and SUPABASE_KEY environment variables not set.")
-        self.client: Client = create_client(url, key)
+        # Use Railway PostgreSQL service instead of Supabase
+        self.railway_service = get_railway_service()
+        logger.info("✅ Using Railway PostgreSQL instead of Supabase")
 
     async def store_user_memory(self, user_id: str, fingerprint: dict):
-        """Stores or updates a user's writing fingerprint in Supabase."""
+        """Stores or updates a user's writing fingerprint in Railway PostgreSQL."""
         try:
-            data, count = await self.client.table('user_memories').upsert({
-                'user_id': user_id,
-                'fingerprint': fingerprint,
-            }).execute()
-            return data
+            result = await self.railway_service.store_user_memory(user_id, fingerprint)
+            return result
         except Exception as e:
-            # In a real application, you'd want more robust error handling here.
-            print(f"Error storing user memory: {e}")
+            logger.error(f"Error storing user memory: {e}")
             return None
 
     async def get_user_memory(self, user_id: str):
-        """Retrieves a user's writing fingerprint from Supabase."""
+        """Retrieves a user's writing fingerprint from Railway PostgreSQL."""
         try:
-            data, count = await self.client.table('user_memories').select('fingerprint').eq('user_id', user_id).single().execute()
-            return data.get('fingerprint') if data else None
+            result = await self.railway_service.get_user_memory(user_id)
+            return result.get('fingerprint') if result else None
         except Exception as e:
-            print(f"Error retrieving user memory: {e}")
+            logger.error(f"Error retrieving user memory: {e}")
             return None
 
 
-def get_supabase_client() -> Client:
-    """Get Supabase client instance."""
-    url: str = os.environ.get("SUPABASE_URL")
-    key: str = os.environ.get("SUPABASE_KEY")
-    if not url or not key:
+def get_supabase_client():
+    """Get database client instance (now uses Railway PostgreSQL)."""
+    try:
+        return get_railway_client()
+    except Exception as e:
+        logger.warning(f"Railway client creation failed, using mock: {e}")
         # Return a mock client for testing
         class MockClient:
             def table(self, table_name):
                 return MockTable()
         return MockClient()
-    return create_client(url, key)
 
 
 class MockTable:

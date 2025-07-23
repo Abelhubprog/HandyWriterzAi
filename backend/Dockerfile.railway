@@ -1,0 +1,63 @@
+# Railway-optimized Dockerfile for HandyWriterz Backend
+FROM python:3.11-slim
+
+# Set environment variables for Railway deployment
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PORT=8000 \
+    TORCH_CPU_ONLY=true \
+    OMP_NUM_THREADS=2 \
+    MKL_NUM_THREADS=2 \
+    CUDA_VISIBLE_DEVICES=""
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    libpq-dev \
+    pkg-config \
+    libffi-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements files
+COPY backend/requirements.txt .
+COPY backend/requirements-cpu.txt .
+
+# Install Python dependencies with Railway optimizations
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir torch==2.5.1+cpu -f https://download.pytorch.org/whl/torch_stable.html && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir gunicorn uvicorn[standard]
+
+# Copy application code
+COPY backend/ .
+
+# Create necessary directories
+RUN mkdir -p /app/uploads /app/temp /app/logs
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:$PORT/health || exit 1
+
+# Expose port (Railway will set this via $PORT env var)
+EXPOSE $PORT
+
+# Production startup command for Railway
+CMD gunicorn src.main:app \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --workers 2 \
+    --bind 0.0.0.0:$PORT \
+    --max-requests 1000 \
+    --max-requests-jitter 50 \
+    --keepalive 2 \
+    --preload \
+    --access-logfile - \
+    --error-logfile - \
+    --log-level info

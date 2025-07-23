@@ -1,0 +1,58 @@
+# Railway Celery Worker Dockerfile for HandyWriterz
+FROM python:3.11-slim
+
+# Set environment variables for Celery worker
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    C_FORCE_ROOT=1 \
+    TORCH_CPU_ONLY=true \
+    OMP_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    CUDA_VISIBLE_DEVICES=""
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    libpq-dev \
+    pkg-config \
+    libffi-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements files
+COPY backend/requirements.txt .
+COPY backend/requirements-cpu.txt .
+
+# Install Python dependencies optimized for Celery workers
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir torch==2.5.1+cpu -f https://download.pytorch.org/whl/torch_stable.html && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir celery[redis] eventlet
+
+# Copy application code
+COPY backend/ .
+
+# Create necessary directories for worker tasks
+RUN mkdir -p /app/uploads /app/temp /app/logs /app/downloads
+
+# Health check for Celery worker
+HEALTHCHECK --interval=60s --timeout=30s --start-period=60s --retries=3 \
+    CMD celery -A src.workers.celery_app inspect ping || exit 1
+
+# Celery worker command optimized for Railway
+CMD ["celery", "-A", "src.workers.celery_app", "worker", \
+     "--loglevel=info", \
+     "--concurrency=2", \
+     "--max-tasks-per-child=1000", \
+     "--time-limit=300", \
+     "--soft-time-limit=240", \
+     "--without-gossip", \
+     "--without-mingle", \
+     "--without-heartbeat"]

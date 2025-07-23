@@ -25,7 +25,8 @@ sqlalchemy
 alembic
 asyncpg
 psycopg2-binary
-supabase
+# supabase  # Replaced with Railway PostgreSQL
+asyncpg  # Railway PostgreSQL async driver
 chromadb
 
 # Redis and Caching
@@ -80,3 +81,5 @@ pytest
 pytest-asyncio
 httpx
 sentence-transformers
+langgraph
+psycopg2-binary

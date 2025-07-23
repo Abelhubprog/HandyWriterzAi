@@ -7,7 +7,12 @@
 │    from the chat interface to completion of entire user journey for a specific use case say a user long prompt with 10 files n pdf, docx, and an audio and video or video link.  │
 │    user intend suggest or the selected writup type in the chat interface is dissertation, conduct a very comprehensive user journey mapping, and fix and test all flows to       │
 │    ensure the app is fully production ready for Demo day with Ycombinator judges. It must be advanced and top agentic system and cool UI/UX. reestablish configuration files not │
-│     a must you follow old ones, but you must truey understand how to make everything work, test end to end.                                                                      │
+│     a must you follow old ones, but you must truey understand how to make everything work, test end to end. im on windows, cpu only no nvidia cuda.  
+Since I'm on CPU only how to run it locally or how to deploy it and run with zero cost for production ready testing and refinements. 
+i have installed torch 2.5.1+cpu | CUDA in the backend dependencies though.            
+
+
+                                           │
 ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
  ╭───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
@@ -19,7 +24,19 @@
  │                                                                                                                                                                                   │
  │    **Processed Files:**                                                                                                                                                           │
  │    - `continue.md`                                                                                                                                                                │
- │    - `userjourneys.md`                                                                                                                                                            │
+ │    - `userjourneys.md`                   
+ 
+ 
+ 
+ 
+ read the @deps.md @continue.md @important.md files to understand the last progress fixing docker filesthe and context files issue, reestablish configuration files not
+a must you follow old ones, but you must truey understand how to make everything work, test end to end. im on windows, cpu only no nvidia cuda.  
+Since I'm on CPU only how to run it locally or how to deploy it and run with zero cost for production ready testing and refinements. 
+i have installed torch 2.5.1+cpu | CUDA in the backend dependencies though.
+fix docker and configuration issues keenly with total understanding of the entire project, we want to launch this, i dentify exactly how, the services required that are free or very cheap,
+we are on windows 100, we dont have NVidia, cpu only. we are even limited with space in c:/ but enough space in d:/ We want to run local servers and use the app like a real user to test and improve, 
+keenly think about installing dependencies several attemps led to failures and long download times.
+                                                                                                                                         │
  ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ✦ This is a comprehensive and ambitious plan. I will use the userjourneys.md as my guide to implement and test the full flow.
 
