@@ -1,0 +1,3 @@
+packages:
+  - 'frontend'
+  - 'backend' # Assuming backend might become a package

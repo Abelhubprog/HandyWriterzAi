@@ -1,0 +1,70 @@
+# Production CPU-only Dockerfile for HandyWriterz Backend
+FROM python:3.11-slim as base
+
+# Set environment variables for CPU optimization
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    DEBIAN_FRONTEND=noninteractive \
+    TORCH_CPU_ONLY=true \
+    OMP_NUM_THREADS=4 \
+    MKL_NUM_THREADS=4 \
+    CUDA_VISIBLE_DEVICES=""
+
+# Install system dependencies optimized for CPU
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    libpq-dev \
+    pkg-config \
+    libffi-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user for security
+RUN useradd --create-home --shell /bin/bash handywriterz
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements-cpu.txt .
+COPY requirements.txt .
+
+# Install Python dependencies with CPU-only optimizations
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir torch==2.5.1+cpu -f https://download.pytorch.org/whl/torch_stable.html && \
+    pip install --no-cache-dir -r requirements-cpu.txt && \
+    pip install --no-cache-dir gunicorn uvicorn[standard]
+
+# Copy application code
+COPY --chown=handywriterz:handywriterz . .
+
+# Create necessary directories
+RUN mkdir -p /app/uploads /app/temp /app/logs && \
+    chown -R handywriterz:handywriterz /app
+
+# Switch to non-root user
+USER handywriterz
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Production server configuration
+EXPOSE 8000
+
+# Production startup script
+CMD ["gunicorn", "src.main:app", \
+     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--workers", "4", \
+     "--bind", "0.0.0.0:8000", \
+     "--max-requests", "1000", \
+     "--max-requests-jitter", "100", \
+     "--keepalive", "2", \
+     "--preload", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "--log-level", "info"]

@@ -1,0 +1,20 @@
+defaults:
+  writer: gemini-2.5-pro
+  formatter: gemini-2.5-flash
+  search_primary: o3-reasoner
+  search_secondary: sonar-deep
+  search_fallback: kimi-k2
+  qa: o3-reasoner-mini
+  evaluator: claude-opus
+  evaluator_advanced: claude-opus
+
+override_allowlist:
+  - writer
+  - search_primary
+  - evaluator
+  - evaluator_advanced
+
+budget:
+  free: { daily_usd: 0.50, max_model: o3-reasoner }
+  pro:  { daily_usd: 5.00, max_model: sonar-deep }
+  enterprise: { daily_usd: 50, max_model: claude-opus }

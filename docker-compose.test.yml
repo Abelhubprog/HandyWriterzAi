@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  # Test Database with pgvector extension
+  postgres-test:
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_DB: handywriterz_test
+      POSTGRES_USER: handywriterz
+      POSTGRES_PASSWORD: handywriterz_test_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      - ./backend/scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U handywriterz -d handywriterz_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+
+  # Test Redis cache
+  redis-test:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    command: redis-server --appendonly yes
+    networks:
+      - test-network
+
+  # Backend API for testing
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://handywriterz:handywriterz_test_password@postgres-test:5432/handywriterz_test
+      - REDIS_URL=redis://redis-test:6379
+      - ENVIRONMENT=testing
+      - LOG_LEVEL=WARNING
+      - JWT_SECRET_KEY=test_jwt_secret_key_for_testing_only
+      - DYNAMIC_ENV_ID=${DYNAMIC_ENV_ID:-test_env_id}
+      - PAYSTACK_SECRET_KEY=${PAYSTACK_SECRET_KEY:-sk_test_dummy}
+      - COINBASE_API_KEY=${COINBASE_API_KEY:-test_coinbase_key}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-test_openai_key}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-test_anthropic_key}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-test_gemini_key}
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY:-test_perplexity_key}
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+    volumes:
+      - ./backend:/app
+    command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # Frontend for testing
+  frontend-test:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=test
+      - NEXT_PUBLIC_API_URL=http://backend-test:8000
+      - NEXT_PUBLIC_DYNAMIC_ENV_ID=${DYNAMIC_ENV_ID:-test_env_id}
+      - NEXT_PUBLIC_ENVIRONMENT=test
+    ports:
+      - "3001:3000"
+    depends_on:
+      backend-test:
+        condition: service_healthy
+    networks:
+      - test-network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+
+  # Test runner container
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      - DATABASE_URL=postgresql://handywriterz:handywriterz_test_password@postgres-test:5432/handywriterz_test
+      - REDIS_URL=redis://redis-test:6379
+      - BACKEND_URL=http://backend-test:8000
+      - FRONTEND_URL=http://frontend-test:3000
+      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+      backend-test:
+        condition: service_healthy
+    networks:
+      - test-network
+    volumes:
+      - ./:/workspace
+      - playwright-cache:/ms-playwright
+    working_dir: /workspace
+    profiles:
+      - test
+
+volumes:
+  postgres_test_data:
+  redis_test_data:
+  playwright-cache:
+
+networks:
+  test-network:
+    driver: bridge

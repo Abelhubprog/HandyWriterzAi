@@ -1,0 +1,84 @@
+version: 1
+nodes:
+  # ——— high‑level planners ———
+  planner:
+    type: function
+    callable: planner.plan
+
+  master_orchestrator:
+    type: function
+    callable: master_orchestrator.run
+
+  # ——— composite swarms ———
+  research_swarm:
+    type: composite
+    strategy: parallel_merge      # children enjoy their own sub‑edges, merge JSON results
+    children:
+      - arxiv_specialist
+      - cross_disciplinary
+      - methodology_expert
+      - scholar_network
+      - trend_analysis
+
+  writing_swarm:
+    type: composite
+    strategy: sequential
+    children:
+      - academic_tone
+      - clarity_enhancer
+      - structure_optimizer
+      - style_adaptation
+      - citation_master
+
+  qa_swarm:
+    type: composite
+    strategy: sequential
+    children:
+      - argument_validation
+      - bias_detection
+      - fact_checking
+      - ethical_reasoning
+      - originality_guard
+
+  # ——— atomic nodes ———
+  privacy_manager:
+    type: function
+    callable: privacy_manager.clean
+
+  citation_audit:
+    type: function
+    callable: citation_audit.verify
+
+  turnitin_advanced:
+    type: function
+    callable: turnitin_advanced.scan
+
+  formatter_advanced:
+    type: function
+    callable: formatter_advanced.format
+
+edges:
+  # Pipeline for Level‑7 dissertation prompt (Section 7)
+  - source: planner
+    target: research_swarm
+  - source: research_swarm
+    target: citation_audit
+  - source: citation_audit
+    target: writing_swarm
+  - source: writing_swarm
+    target: qa_swarm
+  - source: qa_swarm
+    target: turnitin_advanced
+  - source: turnitin_advanced
+    target: formatter_advanced
+  - source: formatter_advanced
+    target: memory_writer
+
+  # Reflection pipeline (Section 8 – Task A)
+  - source: privacy_manager
+    target: research_swarm
+  - source: research_swarm
+    target: writing_swarm
+  - source: writing_swarm
+    target: qa_swarm
+    condition: task == "reflection"

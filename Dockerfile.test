@@ -1,0 +1,44 @@
+# Test runner Dockerfile
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    nodejs \
+    npm \
+    postgresql-client \
+    redis-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 20
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs
+
+# Install pnpm
+RUN npm install -g pnpm
+
+# Install uv for Python package management
+RUN pip install uv
+
+# Install Playwright
+RUN npm install -g @playwright/test
+RUN npx playwright install --with-deps
+
+# Set working directory
+WORKDIR /workspace
+
+# Install Python dependencies
+COPY backend/pyproject.toml backend/uv.lock* ./backend/
+RUN cd backend && uv sync
+
+# Install frontend dependencies
+COPY frontend/package.json frontend/pnpm-lock.yaml ./frontend/
+RUN cd frontend && pnpm install
+
+# Copy test scripts
+COPY scripts/ ./scripts/
+RUN chmod +x ./scripts/*.sh
+
+# Default command runs all tests
+CMD ["./scripts/run-all-tests.sh"]

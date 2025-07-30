@@ -1,0 +1,499 @@
+{
+  "model_configuration": {
+    "version": "2.0.0",
+    "last_updated": "2025-01-10T00:00:00Z",
+    "updated_by": "admin",
+    "description": "Dynamic model configuration for HandyWriterz three-model workflow"
+  },
+  "agents": {
+    "intent_parser": {
+      "name": "Intent Parser",
+      "description": "Initial user input analysis and intent understanding",
+      "model": "gemini-1.5-pro",
+      "fallback_models": ["grok-2-latest", "o3-mini"],
+      "temperature": 0.1,
+      "max_tokens": 4000,
+      "timeout_seconds": 30,
+      "parameters": {
+        "top_p": 0.9,
+        "safety_settings": "block_medium_and_above"
+      }
+    },
+    "planner": {
+      "name": "Planner",
+      "description": "Creates research and writing plan based on user intent",
+      "model": "gemini-1.5-pro",
+      "fallback_models": ["grok-2-latest", "o3-mini"],
+      "temperature": 0.2,
+      "max_tokens": 6000,
+      "timeout_seconds": 45,
+      "parameters": {
+        "top_p": 0.9,
+        "safety_settings": "block_medium_and_above"
+      }
+    },
+    "intelligent_intent_analyzer": {
+      "name": "Intelligent Intent Analyzer", 
+      "description": "Advanced requirement extraction and analysis",
+      "model": "claude-3-5-sonnet-20241022",
+      "fallback_models": ["gemini-2.0-flash-thinking-exp", "gpt-4o"],
+      "temperature": 0.2,
+      "max_tokens": 6000,
+      "timeout_seconds": 45,
+      "parameters": {
+        "top_p": 0.95,
+        "top_k": 40
+      }
+    },
+    "master_orchestrator": {
+      "name": "Master Orchestrator",
+      "description": "Intelligent workflow routing with complexity analysis",
+      "model": "o1-preview",
+      "fallback_models": ["claude-3-5-sonnet-20241022", "gemini-2.0-flash-thinking-exp"],
+      "temperature": 0.0,
+      "max_tokens": 8000,
+      "timeout_seconds": 120,
+      "parameters": {
+        "reasoning_effort": "high"
+      }
+    },
+    "search_gemini": {
+      "name": "Gemini Search Agent",
+      "description": "Enhanced Gemini with multimodal capabilities",
+      "model": "gemini-2.0-flash-thinking-exp",
+      "fallback_models": ["gemini-1.5-pro", "claude-3-5-sonnet-20241022"],
+      "temperature": 0.1,
+      "max_tokens": 8000,
+      "timeout_seconds": 120,
+      "parameters": {
+        "top_p": 0.9,
+        "top_k": 40,
+        "safety_settings": "block_medium_and_above"
+      }
+    },
+    "search_claude": {
+      "name": "Claude Search Agent",
+      "description": "Analytical reasoning specialist",
+      "model": "claude-3-5-sonnet-20241022",
+      "fallback_models": ["claude-3-5-haiku-20241022", "gemini-2.0-flash-thinking-exp"],
+      "temperature": 0.1,
+      "max_tokens": 8000,
+      "timeout_seconds": 120,
+      "parameters": {
+        "top_p": 0.9
+      }
+    },
+    "search_openai": {
+      "name": "OpenAI Search Agent",
+      "description": "GPT-4 general intelligence",
+      "model": "gpt-4o",
+      "fallback_models": ["gpt-4o-mini", "claude-3-5-sonnet-20241022"],
+      "temperature": 0.1,
+      "max_tokens": 8000,
+      "timeout_seconds": 120,
+      "parameters": {
+        "top_p": 0.9,
+        "frequency_penalty": 0.0,
+        "presence_penalty": 0.0
+      }
+    },
+    "search_perplexity": {
+      "name": "Perplexity Search Agent",
+      "description": "Web search specialist with real-time data",
+      "model": "llama-3.1-sonar-large-128k-online",
+      "fallback_models": ["llama-3.1-sonar-small-128k-online", "claude-3-5-sonnet-20241022"],
+      "temperature": 0.1,
+      "max_tokens": 8000,
+      "timeout_seconds": 120,
+      "parameters": {
+        "return_citations": true,
+        "search_domain_filter": ["edu", "org", "gov"],
+        "search_recency_filter": "month"
+      }
+    },
+    "search_deepseek": {
+      "name": "DeepSeek Search Agent",
+      "description": "Technical and coding specialist",
+      "model": "deepseek-chat",
+      "fallback_models": ["deepseek-coder", "claude-3-5-sonnet-20241022"],
+      "temperature": 0.1,
+      "max_tokens": 8000,
+      "timeout_seconds": 120,
+      "parameters": {
+        "top_p": 0.95,
+        "repetition_penalty": 1.0
+      }
+    },
+    "search_qwen": {
+      "name": "Qwen Search Agent",
+      "description": "Multilingual specialist",
+      "model": "qwen2.5-72b-instruct",
+      "fallback_models": ["qwen2.5-32b-instruct", "gemini-2.0-flash-thinking-exp"],
+      "temperature": 0.1,
+      "max_tokens": 8000,
+      "timeout_seconds": 120,
+      "parameters": {
+        "top_p": 0.9,
+        "repetition_penalty": 1.05
+      }
+    },
+    "search_grok": {
+      "name": "Grok Search Agent",
+      "description": "Real-time information and social context",
+      "model": "grok-2-latest",
+      "fallback_models": ["grok-2-1212", "claude-3-5-sonnet-20241022"],
+      "temperature": 0.2,
+      "max_tokens": 8000,
+      "timeout_seconds": 120,
+      "parameters": {
+        "top_p": 0.9,
+        "real_time_data": true
+      }
+    },
+    "search_o3": {
+      "name": "O3 Search Agent",
+      "description": "Advanced reasoning for complex queries",
+      "model": "o3-mini",
+      "fallback_models": ["o1-preview", "claude-3-5-sonnet-20241022"],
+      "temperature": 0.0,
+      "max_tokens": 8000,
+      "timeout_seconds": 180,
+      "parameters": {
+        "reasoning_effort": "medium"
+      }
+    },
+    "writer": {
+      "name": "Writer Agent",
+      "description": "Content synthesis and generation",
+      "model": "claude-3-5-sonnet-20241022",
+      "fallback_models": ["gemini-2.0-flash-thinking-exp", "gpt-4o"],
+      "temperature": 0.3,
+      "max_tokens": 8000,
+      "timeout_seconds": 180,
+      "parameters": {
+        "top_p": 0.95
+      }
+    },
+    "evaluator_advanced": {
+      "name": "Advanced Evaluator",
+      "description": "Quality assessment across multiple models",
+      "model": "o1-preview",
+      "fallback_models": ["claude-3-5-sonnet-20241022", "gpt-4o"],
+      "temperature": 0.0,
+      "max_tokens": 4000,
+      "timeout_seconds": 120,
+      "parameters": {
+        "reasoning_effort": "high"
+      }
+    },
+    "formatter_advanced": {
+      "name": "Advanced Formatter",
+      "description": "Professional document generation",
+      "model": "claude-3-5-sonnet-20241022",
+      "fallback_models": ["gemini-2.0-flash-thinking-exp", "gpt-4o"],
+      "temperature": 0.1,
+      "max_tokens": 8000,
+      "timeout_seconds": 90,
+      "parameters": {
+        "top_p": 0.9
+      }
+    },
+    "swarm_intelligence_coordinator": {
+      "name": "Swarm Intelligence Coordinator",
+      "description": "Collective problem-solving coordinator",
+      "model": "o1-preview",
+      "fallback_models": ["claude-3-5-sonnet-20241022", "gemini-2.0-flash-thinking-exp"],
+      "temperature": 0.0,
+      "max_tokens": 8000,
+      "timeout_seconds": 180,
+      "parameters": {
+        "reasoning_effort": "high"
+      }
+    },
+    "emergent_intelligence_engine": {
+      "name": "Emergent Intelligence Engine",
+      "description": "Pattern synthesis and meta-learning",
+      "model": "o1-preview",
+      "fallback_models": ["claude-3-5-sonnet-20241022", "gemini-2.0-flash-thinking-exp"],
+      "temperature": 0.0,
+      "max_tokens": 8000,
+      "timeout_seconds": 240,
+      "parameters": {
+        "reasoning_effort": "high"
+      }
+    }
+  },
+  "model_providers": {
+    "openai": {
+      "name": "OpenAI",
+      "api_key_env": "OPENAI_API_KEY",
+      "base_url": "https://api.openai.com/v1",
+      "models": {
+        "gpt-4o": {
+          "display_name": "GPT-4o",
+          "context_length": 128000,
+          "pricing": {
+            "input_per_1k": 0.0025,
+            "output_per_1k": 0.01
+          }
+        },
+        "gpt-4o-mini": {
+          "display_name": "GPT-4o Mini",
+          "context_length": 128000,
+          "pricing": {
+            "input_per_1k": 0.00015,
+            "output_per_1k": 0.0006
+          }
+        },
+        "o1-preview": {
+          "display_name": "O1 Preview",
+          "context_length": 128000,
+          "pricing": {
+            "input_per_1k": 0.015,
+            "output_per_1k": 0.06
+          }
+        },
+        "o3-mini": {
+          "display_name": "O3 Mini",
+          "context_length": 128000,
+          "pricing": {
+            "input_per_1k": 0.003,
+            "output_per_1k": 0.012
+          }
+        }
+      }
+    },
+    "anthropic": {
+      "name": "Anthropic",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "base_url": "https://api.anthropic.com",
+      "models": {
+        "claude-3-5-sonnet-20241022": {
+          "display_name": "Claude 3.5 Sonnet",
+          "context_length": 200000,
+          "pricing": {
+            "input_per_1k": 0.003,
+            "output_per_1k": 0.015
+          }
+        },
+        "claude-3-5-haiku-20241022": {
+          "display_name": "Claude 3.5 Haiku",
+          "context_length": 200000,
+          "pricing": {
+            "input_per_1k": 0.0008,
+            "output_per_1k": 0.004
+          }
+        }
+      }
+    },
+    "google": {
+      "name": "Google",
+      "api_key_env": "GOOGLE_API_KEY",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "models": {
+        "gemini-2.0-flash-thinking-exp": {
+          "display_name": "Gemini 2.0 Flash Thinking",
+          "context_length": 1000000,
+          "pricing": {
+            "input_per_1k": 0.00075,
+            "output_per_1k": 0.003
+          }
+        },
+        "gemini-1.5-pro": {
+          "display_name": "Gemini 1.5 Pro",
+          "context_length": 1000000,
+          "pricing": {
+            "input_per_1k": 0.00125,
+            "output_per_1k": 0.005
+          }
+        }
+      }
+    },
+    "perplexity": {
+      "name": "Perplexity",
+      "api_key_env": "PERPLEXITY_API_KEY",
+      "base_url": "https://api.perplexity.ai",
+      "models": {
+        "llama-3.1-sonar-large-128k-online": {
+          "display_name": "Llama 3.1 Sonar Large Online",
+          "context_length": 127072,
+          "pricing": {
+            "input_per_1k": 0.001,
+            "output_per_1k": 0.001
+          }
+        },
+        "llama-3.1-sonar-small-128k-online": {
+          "display_name": "Llama 3.1 Sonar Small Online",
+          "context_length": 127072,
+          "pricing": {
+            "input_per_1k": 0.0002,
+            "output_per_1k": 0.0002
+          }
+        }
+      }
+    },
+    "deepseek": {
+      "name": "DeepSeek",
+      "api_key_env": "DEEPSEEK_API_KEY",
+      "base_url": "https://api.deepseek.com",
+      "models": {
+        "deepseek-chat": {
+          "display_name": "DeepSeek Chat",
+          "context_length": 64000,
+          "pricing": {
+            "input_per_1k": 0.00014,
+            "output_per_1k": 0.00028
+          }
+        },
+        "deepseek-coder": {
+          "display_name": "DeepSeek Coder",
+          "context_length": 64000,
+          "pricing": {
+            "input_per_1k": 0.00014,
+            "output_per_1k": 0.00028
+          }
+        }
+      }
+    },
+    "alibaba": {
+      "name": "Alibaba Cloud",
+      "api_key_env": "QWEN_API_KEY",
+      "base_url": "https://dashscope.aliyuncs.com/api/v1",
+      "models": {
+        "qwen2.5-72b-instruct": {
+          "display_name": "Qwen2.5 72B Instruct",
+          "context_length": 131072,
+          "pricing": {
+            "input_per_1k": 0.0004,
+            "output_per_1k": 0.0012
+          }
+        },
+        "qwen2.5-32b-instruct": {
+          "display_name": "Qwen2.5 32B Instruct",
+          "context_length": 131072,
+          "pricing": {
+            "input_per_1k": 0.0002,
+            "output_per_1k": 0.0006
+          }
+        }
+      }
+    },
+    "x-ai": {
+      "name": "xAI",
+      "api_key_env": "XAI_API_KEY",
+      "base_url": "https://api.x.ai/v1",
+      "models": {
+        "grok-2-latest": {
+          "display_name": "Grok 2 Latest",
+          "context_length": 131072,
+          "pricing": {
+            "input_per_1k": 0.002,
+            "output_per_1k": 0.01
+          }
+        },
+        "grok-2-1212": {
+          "display_name": "Grok 2",
+          "context_length": 131072,
+          "pricing": {
+            "input_per_1k": 0.002,
+            "output_per_1k": 0.01
+          }
+        }
+      }
+    }
+  },
+  "swarm_configurations": {
+    "qa_swarm": {
+      "name": "QA Swarm",
+      "description": "Quality assurance collective intelligence",
+      "agents": {
+        "fact_checking": {
+          "model": "o1-preview",
+          "weight": 0.3
+        },
+        "bias_detection": {
+          "model": "claude-3-5-sonnet-20241022",
+          "weight": 0.25
+        },
+        "argument_validation": {
+          "model": "gpt-4o",
+          "weight": 0.25
+        },
+        "originality_guard": {
+          "model": "gemini-2.0-flash-thinking-exp",
+          "weight": 0.2
+        }
+      },
+      "consensus_threshold": 0.75,
+      "diversity_target": 0.8
+    },
+    "research_swarm": {
+      "name": "Research Swarm",
+      "description": "Collaborative research intelligence",
+      "agents": {
+        "arxiv_specialist": {
+          "model": "claude-3-5-sonnet-20241022",
+          "weight": 0.25
+        },
+        "scholar_network": {
+          "model": "perplexity-online",
+          "weight": 0.25
+        },
+        "methodology_expert": {
+          "model": "o1-preview",
+          "weight": 0.25
+        },
+        "trend_analysis": {
+          "model": "grok-2-latest",
+          "weight": 0.25
+        }
+      },
+      "consensus_threshold": 0.7,
+      "diversity_target": 0.85
+    },
+    "writing_swarm": {
+      "name": "Writing Swarm",
+      "description": "Collaborative writing enhancement",
+      "agents": {
+        "academic_tone": {
+          "model": "claude-3-5-sonnet-20241022",
+          "weight": 0.3
+        },
+        "structure_optimizer": {
+          "model": "o1-preview",
+          "weight": 0.25
+        },
+        "clarity_enhancer": {
+          "model": "gpt-4o",
+          "weight": 0.25
+        },
+        "style_adaptation": {
+          "model": "gemini-2.0-flash-thinking-exp",
+          "weight": 0.2
+        }
+      },
+      "consensus_threshold": 0.8,
+      "diversity_target": 0.75
+    }
+  },
+  "global_settings": {
+    "default_timeout": 120,
+    "max_retries": 3,
+    "fallback_strategy": "sequential",
+    "cost_optimization": {
+      "enabled": true,
+      "prefer_cheaper_models": false,
+      "max_cost_per_request": 0.50
+    },
+    "performance_monitoring": {
+      "enabled": true,
+      "log_response_times": true,
+      "track_token_usage": true
+    },
+    "security": {
+      "input_sanitization": true,
+      "output_filtering": true,
+      "rate_limiting": true
+    }
+  }
+}

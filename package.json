@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter handywriterz-nextjs dev"
+  },
+	"dependencies": {
+		"react-speech-recognition": "^4.0.1",
+		"@types/react-speech-recognition": "^3.9.6"
+	}
+}

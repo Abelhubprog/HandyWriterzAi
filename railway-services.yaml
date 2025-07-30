@@ -1,0 +1,143 @@
+# Railway Multi-Service Configuration
+# This file defines the multi-service architecture for Railway deployment
+
+services:
+  # Main Backend API Service
+  backend:
+    source: .
+    build:
+      builder: dockerfile
+      dockerfilePath: backend/Dockerfile.railway
+    deploy:
+      numReplicas: 1
+      sleepApplication: false
+      restartPolicyType: ON_FAILURE
+    variables:
+      PORT: 8000
+      SERVICE_NAME: backend-api
+      TORCH_CPU_ONLY: true
+      OMP_NUM_THREADS: 2
+      MKL_NUM_THREADS: 2
+    healthcheck:
+      path: /health
+      interval: 30
+      timeout: 10
+      retries: 3
+    resources:
+      memory: 1024  # 1GB RAM
+      cpu: 1000     # 1 vCPU
+
+  # Celery Worker Service for Background Tasks
+  celery-worker:
+    source: .
+    build:
+      builder: dockerfile
+      dockerfilePath: backend/Dockerfile.celery
+    deploy:
+      numReplicas: 1
+      sleepApplication: false
+      restartPolicyType: ON_FAILURE
+    variables:
+      SERVICE_NAME: celery-worker
+      CELERY_WORKER_CONCURRENCY: 2
+      TORCH_CPU_ONLY: true
+      OMP_NUM_THREADS: 1
+      MKL_NUM_THREADS: 1
+    command: ["celery", "-A", "src.workers.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    resources:
+      memory: 512   # 512MB RAM
+      cpu: 500      # 0.5 vCPU
+
+  # Frontend Next.js Application
+  frontend:
+    source: frontend/web/HandyWriterz
+    build:
+      builder: nixpacks
+    deploy:
+      numReplicas: 1
+      sleepApplication: true  # Can sleep to save resources
+      restartPolicyType: ON_FAILURE
+    variables:
+      NODE_ENV: production
+      PORT: 3000
+    resources:
+      memory: 512   # 512MB RAM
+      cpu: 500      # 0.5 vCPU
+
+# Database Services (Managed by Railway)
+databases:
+  postgres:
+    type: postgresql
+    version: "15"
+    extensions:
+      - vector  # pgvector for embeddings
+    resources:
+      memory: 256   # 256MB RAM
+      storage: 1    # 1GB storage
+
+  redis:
+    type: redis
+    version: "7"
+    resources:
+      memory: 64    # 64MB RAM
+
+# Shared Environment Variables
+environment:
+  shared:
+    # Application URLs (updated after deployment)
+    NEXT_PUBLIC_APP_URL: ${{RAILWAY_STATIC_URL}}
+    NEXT_PUBLIC_BACKEND_URL: ${{backend.RAILWAY_STATIC_URL}}
+    BACKEND_URL: ${{backend.RAILWAY_STATIC_URL}}
+    
+    # Database connections (auto-provided by Railway)
+    DATABASE_URL: ${{Postgres.DATABASE_URL}}
+    REDIS_URL: ${{Redis.REDIS_URL}}
+    
+    # Application settings
+    NODE_ENV: production
+    LOG_LEVEL: info
+    ENABLE_DEBUG_LOGGING: false
+    
+    # CPU optimization
+    TORCH_CPU_ONLY: true
+    CUDA_VISIBLE_DEVICES: ""
+    
+    # Security
+    USE_SECURE_COOKIES: true
+    
+    # Rate limiting
+    RATE_LIMIT_REQUESTS_PER_MINUTE: 60
+    RATE_LIMIT_BURST: 10
+    RATE_LIMIT: 1000
+    
+    # Feature flags
+    NEXT_PUBLIC_ENABLE_DOCX_CONVERT: true
+    NEXT_PUBLIC_ENABLE_UNMUTE: true
+    NEXT_PUBLIC_ENABLE_MM_RESEARCH: true
+    NEXT_PUBLIC_ENABLE_TUTOR_REVIEW: true
+    NEXT_PUBLIC_ENABLE_SUBSCRIPTION_BILLING: false
+    NEXT_PUBLIC_ENABLE_ANALYTICS: false
+    
+    # Pricing
+    NEXT_PUBLIC_PRICE_PER_PAGE_GBP: 12
+    NEXT_PUBLIC_WORDS_PER_PAGE: 275
+    NEXT_PUBLIC_SUBSCRIPTION_MONTHLY_GBP: 20
+    NEXT_PUBLIC_TRIAL_WORD_LIMIT: 1000
+
+# Service Dependencies
+dependencies:
+  backend:
+    - postgres
+    - redis
+  celery-worker:
+    - postgres
+    - redis
+    - backend
+  frontend:
+    - backend
+
+# Resource Limits (Free Tier Optimization)
+limits:
+  total_memory: 2048  # 2GB total
+  total_cpu: 2000     # 2 vCPU total
+  execution_hours: 500 # 500 hours/month
