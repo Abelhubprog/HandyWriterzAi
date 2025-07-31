@@ -16,6 +16,14 @@ from src.agent.base import BaseNode, NodeError
 from ...agent.handywriterz_state import HandyWriterzState
 from src.prompts.system_prompts import secure_prompt_loader
 
+# Import search adapter for standardization
+try:
+    from src.agent.search.adapter import to_search_results
+except ImportError:
+    # Fallback if adapter not available
+    def to_search_results(agent_name, payload):
+        return []
+
 
 @dataclass
 class GeminiSearchResult:
@@ -138,8 +146,28 @@ class GeminiSearchAgent(BaseNode):
                 follow_up_queries=research_gaps.get("suggested_queries", [])
             )
             
-            # Update state with search results
+            # Convert to standardized SearchResult format using adapter
+            standardized_results = []
+            try:
+                # Create adapter-compatible payload from Gemini results
+                adapter_payload = {
+                    "sources": source_recommendations.get("academic_sources", []),
+                    "insights": research_synthesis.get("insights", []),
+                    "analysis": knowledge_analysis
+                }
+                
+                # Use adapter to standardize results
+                standardized_results = to_search_results("gemini", adapter_payload)
+                
+                self.logger.info(f"Standardized {len(standardized_results)} search results via adapter")
+                
+            except Exception as e:
+                self.logger.warning(f"Failed to use search adapter: {e}, falling back to legacy format")
+            
+            # Update state with both legacy and standardized results
             current_results = state.get("raw_search_results", [])
+            
+            # Add legacy format for backward compatibility
             current_results.append({
                 "agent": "gemini",
                 "search_id": search_id,
@@ -148,11 +176,23 @@ class GeminiSearchAgent(BaseNode):
                 "quality_score": search_result.confidence_score
             })
             
+            # Add standardized results if available
+            if standardized_results:
+                for std_result in standardized_results:
+                    current_results.append({
+                        "agent": "gemini_standardized",
+                        "search_id": f"{search_id}_std",
+                        "result": std_result,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "quality_score": std_result.get("credibility_score", 0.8)
+                    })
+            
             state.update({
                 "raw_search_results": current_results,
                 "gemini_search_result": asdict(search_result),
                 "research_insights": search_result.research_insights,
-                "source_recommendations": source_recommendations
+                "source_recommendations": source_recommendations,
+                "standardized_search_results": standardized_results  # New field
             })
             
             self._broadcast_progress(state, "🔮 Gemini AI Research Complete", 100)

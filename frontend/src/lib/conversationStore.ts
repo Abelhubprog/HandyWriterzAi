@@ -41,7 +41,17 @@ export class ConversationStore {
   
   static getConversation(id: string): StoredConversation | null {
     const conversations = this.getAllConversations();
-    return conversations.find(c => c.id === id) || null;
+    const conversation = conversations.find(c => c.id === id);
+    
+    if (conversation && conversation.messages) {
+      // Ensure timestamps are properly formatted
+      conversation.messages = conversation.messages.map(msg => ({
+        ...msg,
+        timestamp: typeof msg.timestamp === 'string' ? msg.timestamp : new Date(msg.timestamp).toISOString()
+      }));
+    }
+    
+    return conversation || null;
   }
   
   static deleteConversation(id: string): void {
@@ -63,12 +73,16 @@ export class ConversationStore {
   static updateConversationWithMessage(id: string, messages: any[]): void {
     const conversation = this.getConversation(id);
     if (conversation) {
-      conversation.messages = messages;
+      // Ensure all timestamps are strings for JSON serialization
+      conversation.messages = messages.map(msg => ({
+        ...msg,
+        timestamp: msg.timestamp instanceof Date ? msg.timestamp.toISOString() : msg.timestamp
+      }));
       conversation.message_count = messages.length;
       conversation.updated_at = new Date().toISOString();
       
-      // Update preview with last message
-      const lastUserMessage = messages.filter(m => m.type === 'human').pop();
+      // Update preview with last message (check for both 'human' and 'user' role)
+      const lastUserMessage = messages.filter(m => m.type === 'human' || m.role === 'user').pop();
       if (lastUserMessage) {
         conversation.last_message_preview = typeof lastUserMessage.content === 'string' 
           ? lastUserMessage.content.slice(0, 100) 
@@ -93,7 +107,10 @@ export class ConversationStore {
       last_message_preview: firstMessage && typeof firstMessage.content === 'string' 
         ? firstMessage.content.slice(0, 100) 
         : '',
-      messages: firstMessage ? [firstMessage] : [],
+      messages: firstMessage ? [{
+        ...firstMessage,
+        timestamp: firstMessage.timestamp instanceof Date ? firstMessage.timestamp.toISOString() : firstMessage.timestamp
+      }] : [],
     };
     
     this.saveConversation(conversation);

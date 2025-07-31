@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from langchain_openai import ChatOpenAI
 from ...agent.handywriterz_state import HandyWriterzState
 
@@ -7,10 +7,17 @@ class OpenAISearchAgent:
     """A search agent that uses OpenAI's GPT-4 for general intelligence."""
 
     def __init__(self):
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError("OPENAI_API_KEY environment variable not set.")
-        self.model = ChatOpenAI(model="gpt-4-turbo", temperature=0)
+        self._model: Optional[ChatOpenAI] = None
+
+    @property
+    def model(self) -> ChatOpenAI:
+        """Lazy initialization of OpenAI model."""
+        if self._model is None:
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                raise ValueError("OPENAI_API_KEY environment variable not set for OpenAISearchAgent.")
+            self._model = ChatOpenAI(model="gpt-4-turbo", temperature=0, api_key=api_key)
+        return self._model
 
     async def execute(self, state: HandyWriterzState, config: dict) -> Dict[str, Any]:
         """

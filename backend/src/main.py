@@ -32,6 +32,20 @@ settings = get_settings()
 setup_logging(settings)
 logger = logging.getLogger(__name__)
 
+# Initialize multi-provider AI system
+from src.models.factory import initialize_factory, get_factory, get_provider
+from src.models.base import ModelRole
+
+# Initialize AI provider factory with API keys from settings
+ai_provider_factory = initialize_factory({
+    "gemini": settings.gemini_api_key,
+    "openai": settings.openai_api_key,
+    "anthropic": settings.anthropic_api_key,
+    "perplexity": settings.perplexity_api_key
+})
+
+logger.info("🤖 Multi-provider AI system initialized")
+
 import asyncio
 import json
 import os
@@ -85,6 +99,11 @@ from src.services.security_service import (
     security_service, get_current_user, require_authorization,
     require_rate_limit, validate_input
 )
+
+# Import new Phase 1 components
+from src.models.registry import initialize_registry, get_registry
+from src.services.budget import get_budget_guard
+from src.services.logging_context import setup_correlation_logging
 from src.middleware.error_middleware import (
     error_middleware, global_exception_handler
 )
@@ -101,7 +120,7 @@ redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"), 
 unified_processor = UnifiedProcessor(SIMPLE_SYSTEM_AVAILABLE, True)
 
 
-from db.models import Base
+from src.db.models import Base
 from sqlalchemy import create_engine
 
 # Create database tables on startup, outside of the lifespan manager
@@ -135,6 +154,38 @@ async def lifespan(app: FastAPI):
 
     # Initialize systems with error handling
     startup_errors = []
+
+    # Setup correlation logging
+    try:
+        setup_correlation_logging()
+        logger.info("✅ Correlation logging initialized")
+    except Exception as e:
+        startup_errors.append(f"Correlation logging setup failed: {e}")
+        logger.error(f"❌ Correlation logging setup failed: {e}")
+
+    # Initialize model registry
+    try:
+        model_config_path = "src/config/model_config.yaml"
+        price_table_path = "src/config/price_table.json"
+        strict_mode = os.getenv("FEATURE_REGISTRY_ENFORCED", "false").lower() == "true"
+        
+        registry = initialize_registry(model_config_path, price_table_path, strict_mode)
+        if registry.validate():
+            logger.info("✅ Model registry initialized and validated")
+        else:
+            startup_errors.append("Model registry validation failed")
+            logger.error("❌ Model registry validation failed")
+    except Exception as e:
+        startup_errors.append(f"Model registry initialization failed: {e}")
+        logger.error(f"❌ Model registry initialization failed: {e}")
+
+    # Initialize budget guard
+    try:
+        budget_guard = get_budget_guard()
+        logger.info("✅ Budget guard initialized")
+    except Exception as e:
+        startup_errors.append(f"Budget guard initialization failed: {e}")
+        logger.error(f"❌ Budget guard initialization failed: {e}")
 
     # Test Redis connection
     try:
@@ -345,6 +396,47 @@ async def unified_system_status():
         except:
             redis_status = "unhealthy"
 
+        # Feature flags snapshot
+        _settings = get_settings() if get_settings else None
+        feature_flags = {
+            "sse_publisher_unified": os.getenv("FEATURE_SSE_PUBLISHER_UNIFIED", "false").lower() == "true",
+            "params_normalization": os.getenv("FEATURE_PARAMS_NORMALIZATION", "false").lower() == "true", 
+            "double_publish_sse": os.getenv("FEATURE_DOUBLE_PUBLISH_SSE", "false").lower() == "true",
+            "registry_enforced": os.getenv("FEATURE_REGISTRY_ENFORCED", "false").lower() == "true",
+            "search_adapter": os.getenv("FEATURE_SEARCH_ADAPTER", "true").lower() == "true",
+        }
+        
+        # Override with settings if available
+        if _settings:
+            feature_flags.update({
+                "sse_publisher_unified": getattr(_settings, "feature_sse_publisher_unified", feature_flags["sse_publisher_unified"]),
+                "params_normalization": getattr(_settings, "feature_params_normalization", feature_flags["params_normalization"]),
+                "double_publish_sse": getattr(_settings, "feature_double_publish_sse", feature_flags["double_publish_sse"]),
+                "registry_enforced": getattr(_settings, "feature_registry_enforced", feature_flags["registry_enforced"]),
+                "search_adapter": getattr(_settings, "feature_search_adapter", feature_flags["search_adapter"]),
+            })
+
+        # Get model registry status
+        registry_status = "unknown"
+        registry_models = 0
+        try:
+            registry = get_registry()
+            if registry._loaded:
+                registry_status = "loaded"
+                registry_models = len(registry.get_all_models())
+            else:
+                registry_status = "not_loaded"
+        except:
+            registry_status = "error"
+
+        # Get budget guard status
+        budget_status = "unknown"
+        try:
+            budget_guard = get_budget_guard()
+            budget_status = "active"
+        except:
+            budget_status = "error"
+
         # Get database status
         db_status = "unknown"
         try:
@@ -401,6 +493,15 @@ async def unified_system_status():
                 "vector_storage": {
                     "status": "available",
                     "purpose": "Semantic search and embeddings"
+                },
+                "model_registry": {
+                    "status": registry_status,
+                    "models_loaded": registry_models,
+                    "purpose": "Model ID mapping and pricing"
+                },
+                "budget_guard": {
+                    "status": budget_status,
+                    "purpose": "Cost control and abuse prevention"
                 }
             },
 
@@ -415,7 +516,8 @@ async def unified_system_status():
                 "web3_authentication": True,
                 "real_time_collaboration": True,
                 "citation_management": True,
-                "plagiarism_checking": True
+                "plagiarism_checking": True,
+                "flags": feature_flags
             },
 
             # API endpoints
@@ -450,6 +552,193 @@ async def unified_system_status():
                 "advanced_handywriterz": {"status": "unknown"}
             }
         }
+
+
+# Multi-Provider AI System Status Endpoint
+@app.get("/api/providers/status")
+@with_error_handling(ErrorCategory.SYSTEM, ErrorSeverity.LOW)
+async def get_providers_status():
+    """
+    🤖 Multi-Provider AI System Status
+    Shows the status of all configured AI providers and their role mappings.
+    """
+    try:
+        factory = get_factory()
+
+        # Get provider statistics
+        stats = factory.get_provider_stats()
+
+        # Get health status
+        health_status = await factory.health_check_all()
+
+        return {
+            "status": "operational",
+            "timestamp": time.time(),
+            "multi_provider_system": {
+                "total_providers": stats["total_providers"],
+                "available_providers": stats["available_providers"],
+                "provider_health": health_status,
+                "role_mappings": stats["role_mappings"],
+                "provider_models": stats["provider_models"]
+            },
+            "capabilities": {
+                "dynamic_routing": True,
+                "role_based_selection": True,
+                "fallback_support": True,
+                "streaming_support": True,
+                "multi_model_support": True
+            },
+            "usage_examples": {
+                "specific_provider": "/api/chat/provider/gemini",
+                "role_based": "/api/chat/role/judge",
+                "auto_routing": "/api/chat (default behavior)"
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Provider status check failed: {e}")
+        return {
+            "status": "error",
+            "timestamp": time.time(),
+            "error": str(e),
+            "multi_provider_system": {
+                "total_providers": 0,
+                "available_providers": [],
+                "provider_health": {}
+            }
+        }
+
+
+# Provider-specific chat endpoint
+@app.post("/api/chat/provider/{provider_name}")
+@require_rate_limit("chat_request")
+@validate_input()
+@with_error_handling(ErrorCategory.AGENT_FAILURE, ErrorSeverity.MEDIUM)
+async def chat_with_specific_provider(
+    provider_name: str,
+    message: str = Form(...),
+    model: Optional[str] = Form(None),
+    temperature: float = Form(0.7),
+    max_tokens: Optional[int] = Form(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_current_user)
+):
+    """
+    🎯 Chat with Specific AI Provider
+
+    Allows direct communication with a specific AI provider (gemini, openai, anthropic).
+    Useful for testing provider capabilities or when you need a specific model.
+    """
+    try:
+        from src.models.base import ChatMessage
+
+        # Get the specific provider
+        provider = get_provider(provider_name=provider_name)
+
+        # Create message
+        messages = [ChatMessage(role="user", content=message)]
+
+        # Get response
+        response = await provider.chat(
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+
+        return {
+            "success": True,
+            "provider": response.provider,
+            "model": response.model,
+            "response": response.content,
+            "usage": response.usage,
+            "metadata": response.metadata
+        }
+
+    except Exception as e:
+        logger.error(f"Provider-specific chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Role-based chat endpoint
+@app.post("/api/chat/role/{role}")
+@require_rate_limit("chat_request")
+@validate_input()
+@with_error_handling(ErrorCategory.AGENT_FAILURE, ErrorSeverity.MEDIUM)
+async def chat_with_role_based_provider(
+    role: str,
+    message: str = Form(...),
+    temperature: float = Form(0.7),
+    max_tokens: Optional[int] = Form(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_current_user)
+):
+    """
+    🎭 Chat with Role-Based Provider Selection
+
+    Automatically selects the best AI provider for a specific role:
+    - judge: Best reasoning for evaluation
+    - lawyer: Complex legal reasoning
+    - researcher: Fast research capabilities
+    - writer: Best for long-form writing
+    - reviewer: Detailed analysis
+    - summarizer: Fast summarization
+    - general: Balanced performance
+    """
+    try:
+        from src.models.base import ChatMessage, ModelRole
+
+        # Convert string role to ModelRole enum
+        try:
+            model_role = ModelRole(role.lower())
+        except ValueError:
+            available_roles = [r.value for r in ModelRole]
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid role '{role}'. Available roles: {available_roles}"
+            )
+
+        # Get provider for this role
+        provider = get_provider(role=model_role)
+
+        # Create message with role-specific system prompt
+        role_prompts = {
+            ModelRole.JUDGE: "You are an expert judge evaluating arguments and evidence with fairness and precision.",
+            ModelRole.LAWYER: "You are an experienced lawyer providing legal analysis and reasoning.",
+            ModelRole.RESEARCHER: "You are a thorough researcher gathering and analyzing information.",
+            ModelRole.WRITER: "You are a skilled writer creating clear, engaging, and well-structured content.",
+            ModelRole.REVIEWER: "You are a detailed reviewer providing comprehensive analysis and feedback.",
+            ModelRole.SUMMARIZER: "You are an expert at creating concise, accurate summaries.",
+            ModelRole.GENERAL: "You are a helpful AI assistant."
+        }
+
+        messages = [
+            ChatMessage(role="system", content=role_prompts.get(model_role, "")),
+            ChatMessage(role="user", content=message)
+        ]
+
+        # Get response using role-appropriate model
+        model = provider.get_default_model(model_role)
+        response = await provider.chat(
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+
+        return {
+            "success": True,
+            "role": role,
+            "provider": response.provider,
+            "model": response.model,
+            "response": response.content,
+            "usage": response.usage,
+            "role_optimization": f"Selected {response.provider} with {response.model} for {role} role"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Role-based chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Routing analysis endpoint for development/debugging
@@ -719,18 +1008,30 @@ async def unified_chat_endpoint(
 
         # Generate trace_id for frontend consistency
         trace_id = str(uuid.uuid4())
-        
+
+        # Optionally normalize user_params before processing (feature-gated)
+        _settings = get_settings()
+        normalized_params = req.user_params
+        if getattr(_settings, "feature_params_normalization", False):
+            try:
+                from src.agent.routing.normalization import normalize_user_params, validate_user_params
+                normalized_params = normalize_user_params(normalized_params or {})
+                validate_user_params(normalized_params)
+            except Exception:
+                # do-not-harm: fall back silently
+                normalized_params = req.user_params
+
         # Process using unified processor with streaming support
         result = await unified_processor.process_message(
             message=req.prompt,
             files=processed_files,
-            user_params=req.user_params,
+            user_params=normalized_params,
             user_id=user_id,
             conversation_id=trace_id
         )
 
         # Use the trace_id we generated (conversation_id should match)
-        
+
         # Enhanced response format compatible with both frontend expectations
         response = {
             "success": result.get("success", True),
@@ -961,9 +1262,32 @@ async def start_writing(
                     subscription_tier="free"
                 )
 
+        # Optionally normalize user parameters (feature-gated) before Pydantic validation
+        _settings = get_settings()
+        incoming_params = request.user_params or {}
+        
+        # Check feature flag from settings or environment
+        feature_enabled = (
+            getattr(_settings, "feature_params_normalization", False) if _settings 
+            else os.getenv("FEATURE_PARAMS_NORMALIZATION", "false").lower() == "true"
+        )
+        
+        if feature_enabled:
+            try:
+                from src.agent.routing.normalization import normalize_user_params, validate_user_params
+                logger.debug(f"Normalizing user params: {incoming_params}")
+                normalized_params = normalize_user_params(incoming_params)
+                validate_user_params(normalized_params)
+                incoming_params = normalized_params
+                logger.debug(f"Successfully normalized params: {normalized_params}")
+            except Exception as e:
+                # Keep original on failure to avoid harm
+                logger.warning(f"Parameter normalization failed, using original: {e}")
+                incoming_params = request.user_params or {}
+
         # Validate user parameters
         try:
-            user_params = UserParams(**request.user_params)
+            user_params = UserParams(**incoming_params)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid user parameters: {e}")
 
@@ -1072,11 +1396,10 @@ async def stream_updates(conversation_id: str):
 
     return StreamingResponse(
         generate_events(),
-        media_type="text/plain",
+        media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Content-Type": "text/event-stream",
+            "Connection": "keep-alive"
         }
     )
 

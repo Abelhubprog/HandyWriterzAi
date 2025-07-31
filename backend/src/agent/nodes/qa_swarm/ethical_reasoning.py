@@ -5,9 +5,10 @@ This micro-agent analyzes the ethical implications of the generated content,
 ensuring the writing is responsible and ethically sound.
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
+import os
 
 from src.agent.base import BaseNode
 from ...handywriterz_state import HandyWriterzState
@@ -19,7 +20,17 @@ class EthicalReasoningAgent(BaseNode):
 
     def __init__(self):
         super().__init__(name="EthicalReasoningAgent")
-        self.llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+        self._llm: Optional[ChatOpenAI] = None
+
+    @property
+    def llm(self) -> ChatOpenAI:
+        """Lazy initialization of LLM client."""
+        if self._llm is None:
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                raise ValueError("OPENAI_API_KEY environment variable is required for EthicalReasoningAgent")
+            self._llm = ChatOpenAI(model="gpt-4o", temperature=0.1, api_key=api_key)
+        return self._llm
 
     async def execute(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """
@@ -69,4 +80,15 @@ class EthicalReasoningAgent(BaseNode):
             self.logger.error(f"LLM call failed during ethical reasoning analysis: {e}")
             return {"analysis": "Could not perform ethical reasoning analysis."}
 
-ethical_reasoning_agent_node = EthicalReasoningAgent()
+# Lazy global instance initialization
+_ethical_reasoning_agent_node: Optional[EthicalReasoningAgent] = None
+
+def get_ethical_reasoning_agent_node() -> EthicalReasoningAgent:
+    """Get or create the global ethical reasoning agent node."""
+    global _ethical_reasoning_agent_node
+    if _ethical_reasoning_agent_node is None:
+        _ethical_reasoning_agent_node = EthicalReasoningAgent()
+    return _ethical_reasoning_agent_node
+
+# For backward compatibility
+ethical_reasoning_agent_node = get_ethical_reasoning_agent_node()

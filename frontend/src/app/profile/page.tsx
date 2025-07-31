@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useDynamicAuth } from '@/hooks/useDynamicAuth';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -35,7 +35,10 @@ interface UserStats {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { isAuthenticated, user, isLoading, logout } = useDynamicAuth();
+  const user = { id: "demo-user", email: "demo@example.com", wallet: null };
+const isLoading = false;
+const isAuthenticated = true;
+const logout = async () => {};
   const [userStats, setUserStats] = useState<UserStats>({
     documentsCreated: 12,
     totalWords: 45000,

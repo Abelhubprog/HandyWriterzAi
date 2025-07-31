@@ -5,9 +5,10 @@ This micro-agent analyzes the logical structure of arguments in the
 generated content, ensuring the writing is logically sound and persuasive.
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
+import os
 
 from src.agent.base import BaseNode
 from ...handywriterz_state import HandyWriterzState
@@ -19,7 +20,17 @@ class ArgumentValidationAgent(BaseNode):
 
     def __init__(self):
         super().__init__(name="ArgumentValidationAgent")
-        self.llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+        self._llm: Optional[ChatOpenAI] = None
+
+    @property
+    def llm(self) -> ChatOpenAI:
+        """Lazy initialization of LLM client."""
+        if self._llm is None:
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                raise ValueError("OPENAI_API_KEY environment variable is required for ArgumentValidationAgent")
+            self._llm = ChatOpenAI(model="gpt-4o", temperature=0.1, api_key=api_key)
+        return self._llm
 
     async def execute(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """
@@ -65,4 +76,15 @@ class ArgumentValidationAgent(BaseNode):
             self.logger.error(f"LLM call failed during argument analysis: {e}")
             return {"analysis": "Could not perform argument analysis."}
 
-argument_validation_agent_node = ArgumentValidationAgent()
+# Lazy global instance initialization
+_argument_validation_agent_node: Optional[ArgumentValidationAgent] = None
+
+def get_argument_validation_agent_node() -> ArgumentValidationAgent:
+    """Get or create the global argument validation agent node."""
+    global _argument_validation_agent_node
+    if _argument_validation_agent_node is None:
+        _argument_validation_agent_node = ArgumentValidationAgent()
+    return _argument_validation_agent_node
+
+# For backward compatibility, provide the instance when accessed
+argument_validation_agent_node = get_argument_validation_agent_node()

@@ -2,6 +2,43 @@
 
 Goal: Give the model a full picture of what exists, what is wrong, and what we actually want. The fixes must match ChatGPT/Kimi K2 level polish.
 
+## Backend Architecture Analysis
+
+### Current Multi-Agent System
+The backend implements a sophisticated multi-agent academic writing platform with:
+
+#### Core Architecture
+- **FastAPI Backend**: Production-ready with comprehensive error handling
+- **Multi-Provider AI**: Gemini, OpenAI, Anthropic, Perplexity integration via factory pattern
+- **Dual Graph System**: 
+  - Simple Gemini graph for basic queries
+  - Advanced HandyWriterz LangGraph for complex academic writing
+- **Intelligent Routing**: UnifiedProcessor with ComplexityAnalyzer for optimal system selection
+
+#### Multi-Agent Pipeline
+1. **Intent Analysis**: Enhanced user intent → intelligent analyzer → fallback
+2. **Planning**: Dynamic graph selection based on complexity
+3. **Research Swarm**: Specialized agents (Arxiv, Scholar, CrossRef, PMC, etc.)
+4. **Aggregation & RAG**: Vector similarity search with pgvector
+5. **Writing Swarm**: Academic tone, citation master, structure optimization
+6. **QA & Formatting**: Citation audit, evaluator, formatter
+7. **Compliance**: Turnitin integration, privacy management
+
+#### Critical Issues Identified
+- **Parameter Fragmentation**: Inconsistent camelCase/snake_case across components
+- **SSE Inconsistency**: Mixed JSON/str(dict) event publishing  
+- **Search Agent Heterogeneity**: Each provider returns different schemas
+- **Missing Components**: Normalization, registry, budget controls
+- **Error Path Fragility**: Unsupported kwargs, unguarded finally blocks
+- **Import Inconsistencies**: Relative import hazards
+
+#### Development Priorities
+1. **Foundation**: Parameter normalization, unified SSE publisher, model registry
+2. **Reliability**: Error hardening, structured logging, budget enforcement  
+3. **Security**: Middleware validation, rate limiting, CSRF compliance
+4. **Completeness**: Missing agent nodes, file processing, Turnitin integration
+5. **Testing**: Comprehensive unit/integration/contract test suite
+
 ## 1. What we currently have (from screenshots)
 
 - Sidebar shows New chat, Search, some mock conversations, Library, Settings, User account. Most are placeholders. Selecting items does not load real data.

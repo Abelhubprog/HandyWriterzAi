@@ -44,14 +44,19 @@ const writeUpTypes = [
   { value: 'coding', label: 'Coding' },
 ];
 
+interface MessageInputBarWithPromptProps extends MessageInputBarProps {
+  prompt?: string;
+}
+
 export const MessageInputBar = React.forwardRef<
   { setTextFromExample: (text: string) => void },
-  MessageInputBarProps
+  MessageInputBarWithPromptProps
 >(function MessageInputBar({
   onSubmit,
   onCancel,
   isLoading,
   disabled = false,
+  prompt = "What are you working on?",
 }, ref) {
   const [inputValue, setInputValue] = useState('');
   const [writeupType, setWriteupType] = useState('general');
@@ -193,7 +198,7 @@ export const MessageInputBar = React.forwardRef<
 
   return (
     <div
-      className={`fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur-sm border-t border-gray-800 transition-all duration-200 ${
+      className={`fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border transition-all duration-200 ${
         isDragOver ? 'bg-blue-900/20 border-blue-500/50' : ''
       }`}
       style={{ marginLeft: '240px' }} // Account for sidebar width
@@ -202,7 +207,13 @@ export const MessageInputBar = React.forwardRef<
       onDragOver={handleDragEvents}
       onDrop={handleDrop}
     >
-      <div className="max-w-4xl mx-auto px-4 py-3">
+      <div className="max-w-2xl mx-auto px-4 py-4 flex flex-col items-center">
+        {/* Prompt above input bar */}
+        {prompt && (
+          <div className="mb-2 text-lg md:text-xl font-semibold text-center text-foreground/90 dark:text-white">
+            {prompt}
+          </div>
+        )}
         {/* File Chips - Outside input container */}
         {attachedFiles.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-2">
@@ -239,29 +250,26 @@ export const MessageInputBar = React.forwardRef<
         />
 
         {/* Unified Input Bar - Matching design from images */}
-        <div className="flex items-center bg-gray-800/90 border border-gray-700 rounded-2xl px-3 py-2 gap-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/30 transition-all shadow-lg">
+        <div className="flex items-center bg-background border border-border rounded-2xl px-3 py-2 gap-2 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/30 transition-all shadow-lg w-full">
           {/* + Files Button - Direct file picker */}
           <Button
             disabled={disabled || attachedFiles.length >= 10}
             variant="ghost"
             size="icon"
             onClick={() => fileInputRef.current?.click()}
-            className="h-9 w-9 text-gray-400 hover:text-white hover:bg-gray-700 rounded-xl transition-all flex-shrink-0"
+            className="h-10 w-10 text-muted-foreground hover:text-primary hover:bg-accent rounded-xl transition-all flex-shrink-0"
             title="Add files"
           >
             <Plus className="h-5 w-5" />
           </Button>
 
-          {/* Divider */}
-          <div className="w-px h-6 bg-gray-700" />
-
-          {/* Write-up Type Dropdown - Inline */}
+          {/* Write-up Type Dropdown - Prominent */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant="ghost"
+                variant="secondary"
                 disabled={disabled}
-                className="h-9 px-3 text-gray-300 hover:text-white hover:bg-gray-700 text-sm rounded-xl flex-shrink-0 transition-all font-medium"
+                className="h-10 px-4 text-base font-semibold rounded-xl flex-shrink-0 transition-all"
               >
                 <span>
                   {writeUpTypes.find(t => t.value === writeupType)?.label}
@@ -269,18 +277,18 @@ export const MessageInputBar = React.forwardRef<
                 <ChevronDown className="h-4 w-4 ml-1" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56 bg-gray-800 border-gray-700" side="top" align="start">
+            <DropdownMenuContent className="w-56 bg-background border-border" side="top" align="start">
               {writeUpTypes.map((type) => (
                 <DropdownMenuItem
                   key={type.value}
                   onClick={() => handleWriteupTypeChange(type.value)}
-                  className={`text-gray-200 hover:bg-gray-700 focus:bg-gray-700 cursor-pointer ${
-                    writeupType === type.value ? 'bg-gray-700/50' : ''
+                  className={`text-foreground hover:bg-accent focus:bg-accent cursor-pointer ${
+                    writeupType === type.value ? 'bg-accent/50' : ''
                   }`}
                 >
                   {type.label}
                   {writeupType === type.value && (
-                    <span className="ml-auto text-blue-400">✓</span>
+                    <span className="ml-auto text-primary">✓</span>
                   )}
                 </DropdownMenuItem>
               ))}
@@ -294,8 +302,8 @@ export const MessageInputBar = React.forwardRef<
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Message HandyWriterz..."
-              className="w-full min-h-[40px] max-h-32 resize-none bg-transparent border-none px-3 py-2 pr-10 text-white placeholder-gray-400 focus:outline-none focus:ring-0 text-[15px]"
+              placeholder="Type your message..."
+              className="w-full min-h-[40px] max-h-32 resize-none bg-transparent border-none px-3 py-2 pr-10 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-0 text-base"
               disabled={disabled || isLoading}
               rows={1}
             />
@@ -304,7 +312,7 @@ export const MessageInputBar = React.forwardRef<
               disabled={disabled}
               variant="ghost"
               size="icon"
-              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-lg transition-all"
+              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-primary hover:bg-accent/50 rounded-lg transition-all"
               title="Voice input"
             >
               <Mic className="h-4 w-4" />
@@ -316,20 +324,20 @@ export const MessageInputBar = React.forwardRef<
             <Button
               onClick={onCancel}
               size="icon"
-              className="h-9 w-9 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all flex-shrink-0"
+              className="h-10 w-10 bg-destructive hover:bg-destructive/80 text-white rounded-xl transition-all flex-shrink-0"
               title="Cancel"
             >
-              <X className="h-4 w-4" />
+              <X className="h-5 w-5" />
             </Button>
           ) : (
             <Button
               onClick={handleSubmit}
               disabled={!canSend || disabled}
               size="icon"
-              className={`h-9 w-9 rounded-xl transition-all duration-200 flex-shrink-0 ${
+              className={`h-10 w-10 rounded-xl transition-all duration-200 flex-shrink-0 ${
                 canSend && !disabled
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-105'
-                  : 'bg-gray-700 text-gray-500 cursor-not-allowed opacity-60'
+                  ? 'bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:scale-105'
+                  : 'bg-muted text-muted-foreground cursor-not-allowed opacity-60'
               }`}
               title="Send message"
             >

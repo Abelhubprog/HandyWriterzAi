@@ -5,9 +5,10 @@ This micro-agent verifies the factual accuracy of the generated content,
 ensuring the reliability and quality of the academic writing.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
+import os
 
 from ...base import BaseNode
 from ...handywriterz_state import HandyWriterzState
@@ -20,7 +21,17 @@ class FactCheckingAgent(BaseNode):
 
     def __init__(self):
         super().__init__(name="FactCheckingAgent")
-        self.llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+        self._llm: Optional[ChatOpenAI] = None
+
+    @property
+    def llm(self) -> ChatOpenAI:
+        """Lazy initialization of LLM client."""
+        if self._llm is None:
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                raise ValueError("OPENAI_API_KEY environment variable is required for FactCheckingAgent")
+            self._llm = ChatOpenAI(model="gpt-4o", temperature=0.1, api_key=api_key)
+        return self._llm
 
     async def execute(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """
@@ -89,4 +100,15 @@ class FactCheckingAgent(BaseNode):
             "evidence": search_results,
         }
 
-fact_checking_agent_node = FactCheckingAgent()
+# Lazy global instance initialization
+_fact_checking_agent_node: Optional[FactCheckingAgent] = None
+
+def get_fact_checking_agent_node() -> FactCheckingAgent:
+    """Get or create the global fact checking agent node."""
+    global _fact_checking_agent_node
+    if _fact_checking_agent_node is None:
+        _fact_checking_agent_node = FactCheckingAgent()
+    return _fact_checking_agent_node
+
+# For backward compatibility, provide the instance when accessed
+fact_checking_agent_node = get_fact_checking_agent_node()

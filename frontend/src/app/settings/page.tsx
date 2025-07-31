@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useDynamicAuth } from '@/hooks/useDynamicAuth';
+
 import { useTheme } from '@/contexts/ThemeContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,7 @@ import Sidebar from '@/components/Sidebar';
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { isAuthenticated, user, isLoading } = useDynamicAuth();
+  const user = { id: "demo-user" };
   const { theme, setTheme } = useTheme();
 
   const [notifications, setNotifications] = useState({

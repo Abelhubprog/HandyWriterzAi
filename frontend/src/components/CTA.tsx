@@ -1,5 +1,5 @@
 'use client';
-import { useDynamicContext } from '@dynamic-labs/sdk-react-core';
+import Link from 'next/link';
 import { Button } from './ui/button';
 
 export default function CTA() {

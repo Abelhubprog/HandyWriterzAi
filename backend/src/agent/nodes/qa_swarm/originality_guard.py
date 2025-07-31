@@ -5,9 +5,10 @@ This micro-agent ensures the originality of the generated content and
 protects against plagiarism by comparing it against online sources.
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
+import os
 
 from src.agent.base import BaseNode
 from ...handywriterz_state import HandyWriterzState
@@ -20,7 +21,17 @@ class OriginalityGuardAgent(BaseNode):
 
     def __init__(self):
         super().__init__(name="OriginalityGuardAgent")
-        self.llm = ChatOpenAI(model="gpt-4o", temperature=0.1)
+        self._llm: Optional[ChatOpenAI] = None
+
+    @property
+    def llm(self) -> ChatOpenAI:
+        """Lazy initialization of LLM client."""
+        if self._llm is None:
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                raise ValueError("OPENAI_API_KEY environment variable is required for OriginalityGuardAgent")
+            self._llm = ChatOpenAI(model="gpt-4o", temperature=0.1, api_key=api_key)
+        return self._llm
 
     async def execute(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """

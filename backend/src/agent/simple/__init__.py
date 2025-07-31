@@ -1,19 +1,9 @@
-"""
-Simple Gemini System Integration for Unified AI Platform
+# Simple agent re-exports to stabilize UnifiedProcessor simple path imports.
+# Do-Not-Harm: this file provides a single import surface for the simple graph.
+# Usage:
+#   from src.agent.simple import gemini_graph, GeminiState
+#
+# These symbols are provided by the existing simple graph/state modules.
 
-This module provides integration with the simple Gemini-based agent system,
-allowing it to work seamlessly within the unified platform architecture.
-"""
-
-from .gemini_graph import gemini_graph, GEMINI_AVAILABLE
-from .gemini_state import GeminiState, GEMINI_STATE_AVAILABLE
-
-__all__ = [
-    'gemini_graph',
-    'GeminiState', 
-    'GEMINI_AVAILABLE',
-    'GEMINI_STATE_AVAILABLE'
-]
-
-# Simple system status
-SIMPLE_SYSTEM_READY = GEMINI_AVAILABLE and GEMINI_STATE_AVAILABLE
+from ..graph import build_gemini_graph as gemini_graph  # noqa: F401
+from ..state import GeminiState  # noqa: F401

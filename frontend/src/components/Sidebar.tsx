@@ -55,7 +55,7 @@ export default function Sidebar({
     <>
       {/* Main sidebar */}
       <aside
-        className={`flex flex-col h-screen bg-gray-900 text-gray-100 border-r border-gray-800 transition-all duration-300 ease-in-out ${
+        className={`flex flex-col h-screen bg-background text-foreground border-r border-border transition-all duration-300 ease-in-out ${
           collapsed ? 'w-16' : 'w-64'
         }`}
         role="navigation"
@@ -85,7 +85,7 @@ export default function Sidebar({
       {/* Mobile overlay */}
       {isMobile && showMobileOverlay && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden">
-          <div className="w-64 h-full bg-gray-900">
+          <div className="w-64 h-full bg-background">
             <ExpandedSidebar
               onToggle={closeMobileOverlay}
               currentChatId={currentChatId}

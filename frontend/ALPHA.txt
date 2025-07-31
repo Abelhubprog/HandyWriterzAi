@@ -1,0 +1,101 @@
+Analysis complete and production-readiness plan prepared.
+
+1) Current backend agentic nodes and flow
+- Entry and minimal server: [backend.run_server.py:55](backend/run_server.py:55) builds a fallback FastAPI app with endpoints /api/chat, /api/upload, /api/providers/status and now includes Turnitin router registration near [backend.run_server.py:88](backend/run_server.py:88).
+- Multi-provider factory: [backend.src.models.factory.ProviderFactory()](backend/src/models/factory.py:29) initializes providers (Gemini, OpenAI, Anthropic, OpenRouter, Perplexity), configures default role mappings in [_setup_default_role_mappings()](backend/src/models/factory.py:89), and exposes [get_provider()](backend/src/models/factory.py:119).
+- Roles: [backend.src.models.base.ModelRole](backend/src/models/factory.py:9) used to route. Current map gives Gemini as a general fallback in several roles; this requires constraining.
+- Turnitin agent: Orchestrator drives [ensure_session()](backend/src/turnitin/orchestrator.py:40) -> [submit_and_collect()](backend/src/turnitin/orchestrator.py:46) -> [deliver()](backend/src/turnitin/orchestrator.py:65), and builds [Manifest](backend/src/turnitin/orchestrator.py:53). Data classes are defined in [backend.src.turnitin.models](backend/src/turnitin/models.py:7).
+- Turnitin API: A POST /api/turnitin/start route (file not in read set but created earlier) calls orchestrator.
+
+2) Issues and constraints identified
+- “Simple Gemini” path: Currently present in default role mappings as a candidate for many roles ([factory._setup_default_role_mappings](backend/src/models/factory.py:99)). This must be limited strictly to General Chat, per your instruction.
+- Role routing is static and provider-centric. Production requires a policy layer with task/use-case awareness, model candidates, health/latency fallback, guardrails, and pluggable model selection at runtime.
+- Missing system prompt registry and context window policy. No unified prompt templates for different use cases. No strategy for context files or retrieval injection.
+- No tool/browsing guardrails toggles by use-case. Perplexity is routed for research but not explicitly constrained by capability flags.
+- No dynamic model portfolio mapping per use case (e.g., OpenRouter with Kimi, Qwen, GLM for Reviewer/Writer; Perplexity for Research; Anthropic for Judge).
+- Pylance/editor warnings in run_server due to missing environment; acceptable but will be addressed by dependency install and type hints where practical.
+
+3) Production-ready architecture enhancements
+A) Policy-driven Task Router
+- Introduce a Task enum and router replacing ad-hoc roles with use-case tasks:
+  - Tasks: GENERAL_CHAT, RESEARCH, DRAFTING, CODE_ASSIST, ACADEMIC_TOOLS, DATA_QA, REVIEWER, SUMMARIZER.
+- TaskPolicy registry:
+  - For each task: system prompt template, context policy (max tokens, chunking), allowed tools (web browsing, citations), safety constraints, pluggable model candidates list with priorities.
+- Model portfolio mapping:
+  - GENERAL_CHAT: Gemini allowed as “simple” fast path only; candidates [gemini, openrouter(Kimi Lite), openai(gpt-4o-mini)].
+  - RESEARCH: Perplexity primary; fallback openrouter(Qwen 2.5/3 research-tuned), openai with browsing tool if integrated.
+  - DRAFTING: openrouter(Kimi K2, GLM-4.5), anthropic(sonnet) optional, openai for style polish.
+  - CODE_ASSIST: openrouter(Qwen Code), groq (optional future), openai GPT-4.1 for reasoning.
+  - ACADEMIC_TOOLS: orchestrators like Turnitin; summarizer openai; citations mode with appropriate prompt/template.
+  - DATA_QA: openai/gpt-4o-mini or Qwen for structured extraction, JSON mode; validator pass with Anthropic.
+  - REVIEWER/JUDGE: anthropic primary; fallback openrouter strong reasoning models; temperature/prompt tuned for critique.
+- Health and latency-aware selection:
+  - Each task has candidate providers with weights, latency SLOs, cost bias. Router probes health via [factory.health_check_all()](backend/src/models/factory.py:181) and historical latency; selects best viable candidate.
+
+B) System prompt registry and prompt assembly
+- Create PromptRegistry with templates keyed by Task. Each entry:
+  - system: task-specific instruction, policy constraints (tone, format, citations policy).
+  - prelude: dataset/context assembly (files, metadata, user preferences).
+  - guardrails: refusal policy, privacy redaction rules, reasoning visibility.
+- Implement PromptAssembler that merges system prompt + user content + context snippets. It measures token budget and trims context respecting a ContextPolicy: max model context, reserved tokens for output, chunk ranking (BM25/embedding), and format (JSON mode for structured tasks).
+- Provide pluggable model adapters to handle tokenization estimates per provider for accurate budgeting.
+
+C) Context window and context files
+- ContextPolicy per task:
+  - max_context_tokens, reserved_output_tokens, chunk_size, overlap, ranking mode.
+  - Allowed file types and per-file limits.
+- Context pipeline:
+  - Accept uploaded files via /api/upload. Store URIs and run a preprocessor to create chunks and metadata (sha256, mime, source).
+  - For a given chat turn, fetch relevant chunks using semantic or keyword retrieval (initially keyword and simple embeddings if available), then prompt assembler includes top-K within budget.
+
+D) Pluggable model selection at any point
+- RouteConfig supports model override hints supplied by frontend or internal planner. The Chat endpoint accepts optional task and model hints.
+- Planner layer (lightweight) can decide to switch model mid-conversation for specialized steps (e.g., RESEARCH fetch with Perplexity then DRAFTING with Kimi).
+- Persist conversation state with task metadata so follow-up turns inherit task policies or can switch tasks explicitly.
+
+E) Restrict “simple Gemini”
+- Modify default mapping so Gemini is only in GENERAL_CHAT candidate list. Remove Gemini from other role/task defaults. If legacy role parameter is used, translate roles to tasks and apply constraints so Gemini doesn’t get selected outside GENERAL_CHAT.
+
+F) Guardrails and safety
+- Add response schema modes for structured outputs (JSON schema for DATA_QA).
+- Redaction filter for PII if required by policy.
+- Refusal patterns for disallowed queries based on task.
+- Logging/audit for high-risk tasks.
+
+G) Observability
+- Provider metrics (latency, error rates) aggregated per task/model to improve selection.
+- Trace ids on each request, include provider/model and chosen policy.
+
+4) Implementation plan (incremental)
+Step 1: Introduce task router and policy scaffolding
+- Add Task enum and TaskPolicy registry with initial templates for the primary use cases.
+- Implement a ChatOrchestrator that:
+  - Maps incoming request to Task (from frontend parameter or heuristic defaults).
+  - Resolves a candidate model via Policy + Health.
+  - Builds prompt via PromptAssembler and calls provider.
+
+Step 2: Constrain Gemini
+- Update [factory._setup_default_role_mappings()](backend/src/models/factory.py:89) to remove Gemini from all roles except GENERAL.
+- Add a translation layer from legacy role to Task. If not provided, default to GENERAL_CHAT. Enforce Gemini-only in GENERAL.
+
+Step 3: Prompt registry and context pipeline
+- Add a prompts/ directory with templates and code to load/register templates. Provide initial templates:
+  - general_chat, research_browsing, drafting_writer, code_assist, academic_tools, data_qa, reviewer_judge, summarizer.
+- Add ContextPolicy and a simple chunker; wire /api/upload to register file metadata for context retrieval.
+
+Step 4: Provider selection improvements
+- Add selection logic that checks [get_provider_stats()](backend/src/models/factory.py:201) and [health_check_all()](backend/src/models/factory.py:181), with latency/cost metadata per provider/model (static config initially).
+
+Step 5: API contract updates
+- Expand /api/chat to accept:
+  - task: string enum
+  - context_ids or include_uploaded: boolean
+  - model_hint: optional provider/model
+- Maintain backward compatibility for existing role/provider paths by mapping to tasks.
+
+Step 6: Testing and validation
+- Unit tests for task routing, prompt assembly, and fallback behavior.
+- E2E tests for primary use cases with context injection.
+- Load tests for latency SLOs per task.
+
+5) Concrete code modifications to

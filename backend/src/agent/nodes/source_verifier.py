@@ -1,9 +1,8 @@
 import asyncio
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, cast
 
 from .search_base import SearchResult
 from ..base import BaseNode
-from ..handywriterz_state import HandyWriterzState
 
 class SourceVerifier(BaseNode):
     """
@@ -15,26 +14,46 @@ class SourceVerifier(BaseNode):
         self.min_credibility_score = 0.6
         self.min_relevance_score = 0.5
 
-    async def execute(self, state: HandyWriterzState, config: dict) -> Dict[str, Any]:
+    async def execute(self, state: Dict[str, Any], config: Dict[str, Any] | None = None) -> Dict[str, Any]:
         """
         Executes the source verification process.
         """
         self.logger.info("Verifying aggregated sources...")
-        aggregated_sources = state.get("aggregated_sources", [])
-        
+        aggregated_sources = cast(List[Dict[str, Any]], state.get("aggregated_sources", []))
+
         if not aggregated_sources:
             self.logger.warning("No sources to verify.")
             return {"verified_sources": [], "need_fallback": True}
 
-        verification_tasks = [self.verify_source(SearchResult(**source)) for source in aggregated_sources]
-        verified_results = await asyncio.gather(*verification_tasks)
+        verification_tasks = []
+        for source in aggregated_sources:
+            try:
+                # Normalize minimal required fields to avoid runtime errors
+                normalized = {
+                    "title": source.get("title") or "",
+                    "authors": source.get("authors") or [],
+                    "abstract": source.get("abstract") or source.get("snippet") or "",
+                    "url": source.get("url") or "",
+                    "publication_date": source.get("publication_date") or source.get("published_date"),
+                    "doi": source.get("doi"),
+                    "citation_count": int(source.get("citation_count", 0) or 0),
+                    "source_type": source.get("source_type") or "unknown",
+                    "credibility_score": float(source.get("credibility_score", 0.5) or 0.5),
+                    "relevance_score": float(source.get("relevance_score", 0.5) or 0.5),
+                    "raw_data": source,
+                }
+                verification_tasks.append(self.verify_source(SearchResult(**normalized)))
+            except Exception as e:
+                self.logger.debug(f"Skipping malformed aggregated source: {e}")
+                continue
 
-        verified_sources = [source.to_dict() for source in verified_results if source is not None]
+        verified_results = await asyncio.gather(*verification_tasks)
+        verified_sources = [s.to_dict() for s in verified_results if s is not None]
 
         self.logger.info(f"Verified {len(aggregated_sources)} sources, {len(verified_sources)} passed verification.")
 
         # Determine if fallback is needed
-        min_sources = state.get("user_params", {}).get("min_sources", 5)
+        min_sources = cast(Dict[str, Any], state.get("user_params", {})).get("min_sources", 5)
         need_fallback = len(verified_sources) < min_sources
 
         return {
@@ -55,23 +74,17 @@ class SourceVerifier(BaseNode):
         if source.relevance_score < self.min_relevance_score:
             self.logger.debug(f"Source '{source.title}' failed relevance check ({source.relevance_score}).")
             return None
-            
-        # 3. Link Liveness Check (already partially handled by BaseSearchNode, but we can re-verify)
-        # This is a simplified check. A more robust implementation would handle various HTTP errors.
+
+        # 3. Link Liveness Check
         if not source.url:
-             self.logger.debug(f"Source '{source.title}' has no URL.")
-             return None
+            self.logger.debug(f"Source '{source.title}' has no URL.")
+            return None
 
-        # 4. Bias Detection (Placeholder for future implementation)
-        # bias_score = await self.detect_bias(source)
-        # if bias_score > 0.7:
-        #     return None
-
+        # 4. (Future) Bias detection hook
         return source
 
     async def detect_bias(self, source: SearchResult) -> float:
         """
-        A placeholder for a future bias detection implementation.
-        This would involve analyzing the text for biased language, checking funding sources, etc.
+        Placeholder for future bias detection.
         """
         return 0.0
