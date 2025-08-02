@@ -7,6 +7,7 @@ import { createAssignment, claimNext, AssignmentSummary, CreateAssignmentRequest
 import { AssignmentCard } from '@/components/workbench/AssignmentCard';
 import { ClaimButton } from '@/components/workbench/ClaimButton';
 import { EmptyState } from '@/components/workbench/EmptyState';
+import { nanoid } from 'nanoid';
 
 // Placeholder for your actual auth context/hook
 const useUser = () => {

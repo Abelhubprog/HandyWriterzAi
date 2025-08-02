@@ -11,7 +11,7 @@ COPY frontend/package.json ./
 # Enable pnpm and install dependencies
 RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --frozen-lockfile=false --no-verify-store-integrity
 
 # Switch back to frontend directory
 WORKDIR /app/frontend
