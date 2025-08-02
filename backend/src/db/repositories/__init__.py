@@ -1,0 +1,5 @@
+from .workbench_assignment_repo import WorkbenchAssignmentRepository
+from .workbench_submission_repo import WorkbenchSubmissionRepository
+from .workbench_artifact_repo import WorkbenchArtifactRepository
+from .workbench_section_status_repo import WorkbenchSectionStatusRepository
+from .workbench_user_repo import WorkbenchUserRepository

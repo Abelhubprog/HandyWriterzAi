@@ -1,0 +1,197 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://handywriterz.ai/schemas/sse-v1.json",
+  "title": "HandyWriterz SSE Event Schema v1",
+  "description": "Unified SSE event envelope schema for multi-agent workflows",
+  "type": "object",
+  "required": ["version", "event_type", "correlation_id", "timestamp", "seq"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "v1",
+      "description": "Schema version for forward compatibility"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "start",
+        "routing", 
+        "node_start",
+        "content",
+        "node_end",
+        "progress",
+        "cost_update",
+        "error",
+        "done"
+      ],
+      "description": "Type of SSE event being emitted"
+    },
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9-]+$",
+      "description": "Unique identifier linking related events in a workflow"
+    },
+    "trace_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9-]+$",
+      "description": "Distributed tracing identifier"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when event was generated"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonic sequence number for ordering events"
+    },
+    "node_name": {
+      "type": "string",
+      "description": "Name of the agent node generating this event"
+    },
+    "phase": {
+      "type": "string",
+      "enum": ["init", "research", "aggregation", "writing", "evaluation", "formatting", "complete"],
+      "description": "Current phase of the workflow"
+    },
+    "data": {
+      "type": "object",
+      "description": "Event-specific payload",
+      "oneOf": [
+        {
+          "if": { "properties": { "event_type": { "const": "start" } } },
+          "then": {
+            "properties": {
+              "workflow_id": { "type": "string" },
+              "content_type": { "type": "string" },
+              "estimated_duration": { "type": "number" },
+              "complexity_score": { "type": "number", "minimum": 0, "maximum": 10 }
+            },
+            "required": ["workflow_id", "content_type"]
+          }
+        },
+        {
+          "if": { "properties": { "event_type": { "const": "routing" } } },
+          "then": {
+            "properties": {
+              "system": { "type": "string", "enum": ["simple", "advanced", "hybrid"] },
+              "reason": { "type": "string" },
+              "complexity_score": { "type": "number" },
+              "estimated_cost": { "type": "number" }
+            },
+            "required": ["system", "reason"]
+          }
+        },
+        {
+          "if": { "properties": { "event_type": { "const": "node_start" } } },
+          "then": {
+            "properties": {
+              "node_type": { "type": "string" },
+              "agent_id": { "type": "string" },
+              "provider": { "type": "string" },
+              "model": { "type": "string" }
+            },
+            "required": ["node_type"]
+          }
+        },
+        {
+          "if": { "properties": { "event_type": { "const": "content" } } },
+          "then": {
+            "properties": {
+              "content": { "type": "string" },
+              "content_type": { "type": "string", "enum": ["text", "markdown", "json", "partial"] },
+              "section": { "type": "string" },
+              "is_partial": { "type": "boolean" },
+              "word_count": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["content"]
+          }
+        },
+        {
+          "if": { "properties": { "event_type": { "const": "node_end" } } },
+          "then": {
+            "properties": {
+              "node_type": { "type": "string" },
+              "success": { "type": "boolean" },
+              "duration_ms": { "type": "number", "minimum": 0 },
+              "cost_usd": { "type": "number", "minimum": 0 },
+              "quality_score": { "type": "number", "minimum": 0, "maximum": 1 },
+              "metadata": { "type": "object" }
+            },
+            "required": ["node_type", "success"]
+          }
+        },
+        {
+          "if": { "properties": { "event_type": { "const": "progress" } } },
+          "then": {
+            "properties": {
+              "progress": { "type": "number", "minimum": 0, "maximum": 1 },
+              "stage": { "type": "string" },
+              "eta_seconds": { "type": "number", "minimum": 0 },
+              "completed_tasks": { "type": "integer", "minimum": 0 },
+              "total_tasks": { "type": "integer", "minimum": 1 }
+            },
+            "required": ["progress", "stage"]
+          }
+        },
+        {
+          "if": { "properties": { "event_type": { "const": "cost_update" } } },
+          "then": {
+            "properties": {
+              "total_cost": { "type": "number", "minimum": 0 },
+              "incremental_cost": { "type": "number", "minimum": 0 },
+              "provider": { "type": "string" },
+              "model": { "type": "string" },
+              "tokens_used": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["total_cost", "incremental_cost"]
+          }
+        },
+        {
+          "if": { "properties": { "event_type": { "const": "error" } } },
+          "then": {
+            "properties": {
+              "error_type": { 
+                "type": "string", 
+                "enum": ["validation", "provider", "timeout", "budget", "system", "user"] 
+              },
+              "error_code": { "type": "string" },
+              "message": { "type": "string" },
+              "retryable": { "type": "boolean" },
+              "retry_after_seconds": { "type": "number", "minimum": 0 },
+              "context": { "type": "object" }
+            },
+            "required": ["error_type", "message", "retryable"]
+          }
+        },
+        {
+          "if": { "properties": { "event_type": { "const": "done" } } },
+          "then": {
+            "properties": {
+              "success": { "type": "boolean" },
+              "total_duration_ms": { "type": "number", "minimum": 0 },
+              "total_cost": { "type": "number", "minimum": 0 },
+              "word_count": { "type": "integer", "minimum": 0 },
+              "quality_metrics": { 
+                "type": "object",
+                "properties": {
+                  "coherence": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "relevance": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "academic_tone": { "type": "number", "minimum": 0, "maximum": 1 },
+                  "citation_quality": { "type": "number", "minimum": 0, "maximum": 1 }
+                }
+              },
+              "output_sections": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            },
+            "required": ["success"]
+          }
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}
