@@ -30,6 +30,7 @@ from .utils import (
     insert_citation_markers,
     resolve_urls,
 )
+from .nodes.rewrite_agent import RewriteAgent, get_rewrite_agent # Import RewriteAgent
 
 load_dotenv()
 
@@ -39,6 +40,8 @@ if os.getenv("GEMINI_API_KEY") is None:
 # Used for Google Search API
 genai_client = Client(api_key=os.getenv("GEMINI_API_KEY"))
 
+# Initialize agents
+rewrite_agent_instance = get_rewrite_agent()
 
 # Nodes
 def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerationState:
@@ -262,7 +265,23 @@ def finalize_answer(state: OverallState, config: RunnableConfig):
     return {
         "messages": [AIMessage(content=result.content)],
         "sources_gathered": unique_sources,
+        "current_draft": result.content # Set the initial draft for potential rewriting
     }
+
+def evaluate_answer_for_rewrite(state: HandyWriterzState) -> str:
+    """
+    LangGraph routing function to determine if the answer needs rewriting.
+    Checks if there are highlighted sections or if Turnitin check failed.
+    """
+    if state.get("highlighted_sections") and len(state["highlighted_sections"]) > 0:
+        logger.info(f"💡 EvaluateAnswerForRewrite: Highlighted sections found. Routing to rewrite_document.")
+        return "rewrite_document"
+    elif state.get("turnitin_passed") is False: # Assuming turnitin_passed is set by a previous node
+        logger.info(f"💡 EvaluateAnswerForRewrite: Turnitin check failed. Routing to rewrite_document.")
+        return "rewrite_document"
+    else:
+        logger.info(f"✅ EvaluateAnswerForRewrite: No highlights or Turnitin issues. Routing to END.")
+        return END
 
 
 # Create our Agent Graph
@@ -273,6 +292,7 @@ builder.add_node("generate_query", generate_query)
 builder.add_node("web_research", web_research)
 builder.add_node("reflection", reflection)
 builder.add_node("finalize_answer", finalize_answer)
+builder.add_node("rewrite_document", rewrite_agent_instance.rewrite_document) # Add the rewrite node
 
 # Set the entrypoint as `generate_query`
 # This means that this node is the first one called
@@ -287,7 +307,11 @@ builder.add_edge("web_research", "reflection")
 builder.add_conditional_edges(
     "reflection", evaluate_research, ["web_research", "finalize_answer"]
 )
-# Finalize the answer
-builder.add_edge("finalize_answer", END)
+# After finalizing the answer, evaluate if a rewrite is needed
+builder.add_conditional_edges(
+    "finalize_answer", evaluate_answer_for_rewrite, ["rewrite_document", END]
+)
+# After rewriting, go back to evaluate_answer_for_rewrite for another iteration or to END
+builder.add_edge("rewrite_document", "finalize_answer") # Loop back to re-evaluate after rewrite
 
 graph = builder.compile(name="pro-search-agent")

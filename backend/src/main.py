@@ -17,7 +17,7 @@ from typing import Dict, Any, Optional, List
 
 import redis.asyncio as redis
 import uvicorn
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, Request
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.exceptions import RequestValidationError
@@ -168,7 +168,7 @@ async def lifespan(app: FastAPI):
         model_config_path = "src/config/model_config.yaml"
         price_table_path = "src/config/price_table.json"
         strict_mode = os.getenv("FEATURE_REGISTRY_ENFORCED", "false").lower() == "true"
-        
+
         registry = initialize_registry(model_config_path, price_table_path, strict_mode)
         if registry.validate():
             logger.info("✅ Model registry initialized and validated")
@@ -313,6 +313,18 @@ app.include_router(payments_router)
 app.include_router(payout_router)
 app.include_router(checker_router)
 
+# Include Workbench routes
+from src.api.workbench import router as workbench_router
+from src.api.workbench_auth import router as workbench_auth_router
+from src.api.workbench_ingestion import router as workbench_ingestion_router
+# from src.api.workbench_admin import router as workbench_admin_router # Temporarily commented out until implemented
+
+app.include_router(workbench_router, prefix="/api", tags=["workbench"])
+app.include_router(workbench_auth_router, prefix="/api", tags=["workbench-auth"])
+app.include_router(workbench_ingestion_router, prefix="/api", tags=["workbench-ingestion"])
+# app.include_router(workbench_admin_router, prefix="/api", tags=["workbench-admin"]) # Temporarily commented out
+
+
 # Mount static files for serving the SvelteKit frontend
 static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static")
 if os.path.exists(static_dir):
@@ -400,12 +412,13 @@ async def unified_system_status():
         _settings = get_settings() if get_settings else None
         feature_flags = {
             "sse_publisher_unified": os.getenv("FEATURE_SSE_PUBLISHER_UNIFIED", "false").lower() == "true",
-            "params_normalization": os.getenv("FEATURE_PARAMS_NORMALIZATION", "false").lower() == "true", 
+            "params_normalization": os.getenv("FEATURE_PARAMS_NORMALIZATION", "false").lower() == "true",
             "double_publish_sse": os.getenv("FEATURE_DOUBLE_PUBLISH_SSE", "false").lower() == "true",
             "registry_enforced": os.getenv("FEATURE_REGISTRY_ENFORCED", "false").lower() == "true",
             "search_adapter": os.getenv("FEATURE_SEARCH_ADAPTER", "true").lower() == "true",
+            "turnitin_hitl_enabled": os.getenv("FEATURE_TURNITIN_HITL_ENABLED", "false").lower() == "true", # New flag
         }
-        
+
         # Override with settings if available
         if _settings:
             feature_flags.update({
@@ -414,6 +427,7 @@ async def unified_system_status():
                 "double_publish_sse": getattr(_settings, "feature_double_publish_sse", feature_flags["double_publish_sse"]),
                 "registry_enforced": getattr(_settings, "feature_registry_enforced", feature_flags["registry_enforced"]),
                 "search_adapter": getattr(_settings, "feature_search_adapter", feature_flags["search_adapter"]),
+                "turnitin_hitl_enabled": getattr(_settings, "feature_turnitin_hitl_enabled", feature_flags["turnitin_hitl_enabled"]),
             })
 
         # Get model registry status
@@ -528,7 +542,8 @@ async def unified_system_status():
                 "academic_writing": "/api/write",
                 "file_upload": "/api/upload",
                 "streaming": "/api/stream/{conversation_id}",
-                "documentation": "/docs"
+                "documentation": "/docs",
+                "workbench": "/api/workbench" # New endpoint
             },
 
             # Performance metrics
@@ -1265,13 +1280,13 @@ async def start_writing(
         # Optionally normalize user parameters (feature-gated) before Pydantic validation
         _settings = get_settings()
         incoming_params = request.user_params or {}
-        
+
         # Check feature flag from settings or environment
         feature_enabled = (
-            getattr(_settings, "feature_params_normalization", False) if _settings 
+            getattr(_settings, "feature_params_normalization", False) if _settings
             else os.getenv("FEATURE_PARAMS_NORMALIZATION", "false").lower() == "true"
         )
-        
+
         if feature_enabled:
             try:
                 from src.agent.routing.normalization import normalize_user_params, validate_user_params
@@ -1402,7 +1417,6 @@ async def stream_updates(conversation_id: str):
             "Connection": "keep-alive"
         }
     )
-
 
 
 
@@ -1752,7 +1766,6 @@ async def purchase_credits(
 
         # TODO: Verify payment transaction
         # For now, we'll trust the transaction
-
         # Add credits to user balance
         new_balance = user.credits_balance + amount
         user_repo.update_user_stats(

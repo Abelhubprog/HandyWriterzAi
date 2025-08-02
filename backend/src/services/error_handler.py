@@ -1,20 +1,36 @@
 """
 Revolutionary Error Handler Service for HandyWriterz.
 Production-ready error handling with circuit breakers, retries, and fallbacks.
+Enhanced with SSE integration, registry awareness, and comprehensive observability.
 """
 
 import asyncio
 import logging
 import time
 from enum import Enum
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional, Callable, List
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import json
 import traceback
+import hashlib
 from functools import wraps
+from contextlib import asynccontextmanager
 import redis.asyncio as redis
 import os
+
+# Import enhanced components with graceful fallback
+try:
+    from .model_registry import get_model_registry, ModelSpec
+    REGISTRY_AVAILABLE = True
+except ImportError:
+    REGISTRY_AVAILABLE = False
+
+try:
+    from ..agent.sse_unified import get_sse_publisher, EventType, Phase
+    SSE_AVAILABLE = True
+except ImportError:
+    SSE_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
