@@ -1,8 +1,13 @@
 import { create } from 'zustand';
 import { persist, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import { ConversationStore, type StoredConversation } from '@/lib/conversationStore';
-import { nanoid } from 'nanoid';
+import { shallow } from 'zustand/shallow';
+import { ConversationStore } from '@/lib/conversationStore';
+
+// Prefer native crypto.randomUUID to avoid missing nanoid types/dependency
+const nanoid = () => (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+  ? crypto.randomUUID()
+  : Math.random().toString(36).slice(2));
 
 export interface Message {
   id: string;
@@ -47,18 +52,18 @@ interface ChatState {
   // Conversations
   conversations: Conversation[];
   activeConversationId?: string;
-  
+
   // Streaming
   streaming: StreamingState;
-  
+
   // UI State
   sidebarOpen: boolean;
   showReasoningToggle: boolean;
-  
+
   // Error handling
   error?: string;
   lastFailedMessage?: Message;
-  
+
   // Actions
   loadConversations: () => void;
   createConversation: (firstMessage?: Message) => string;
@@ -67,19 +72,19 @@ interface ChatState {
   updateMessage: (id: string, updates: Partial<Message>) => void;
   deleteConversation: (id: string) => void;
   updateConversationTitle: (id: string, title: string) => void;
-  
+
   // Streaming actions
   startStreaming: (traceId: string) => void;
   updateStreamingMessage: (content: string) => void;
   updateAgentStatus: (status: string) => void;
   stopStreaming: () => void;
-  
+
   // UI actions
   setSidebarOpen: (open: boolean) => void;
   setShowReasoningToggle: (show: boolean) => void;
   setError: (error?: string) => void;
   clearError: () => void;
-  
+
   // Retry functionality
   retryLastFailedMessage: () => Promise<void>;
 }
@@ -94,7 +99,7 @@ export const useChatStore = create<ChatState>()(
         },
         sidebarOpen: true,
         showReasoningToggle: false,
-        
+
         loadConversations: () => {
           const stored = ConversationStore.getAllConversations();
           set((state) => {
@@ -108,7 +113,7 @@ export const useChatStore = create<ChatState>()(
             }));
           });
         },
-        
+
         createConversation: (firstMessage) => {
           const id = nanoid();
           const conversation: Conversation = {
@@ -125,48 +130,48 @@ export const useChatStore = create<ChatState>()(
               timestamp: new Date().toISOString(),
             }] : [],
           };
-          
+
           set((state) => {
             state.conversations.unshift(conversation);
             state.activeConversationId = id;
           });
-          
+
           // Persist to localStorage
           ConversationStore.saveConversation(conversation);
-          
+
           return id;
         },
-        
+
         selectConversation: (id) => {
           set((state) => {
-            state.activeConversationId = id;
+            state.activeConversationId = id || undefined;
             state.error = undefined;
           });
         },
-        
+
         addMessage: (messageData) => {
           const message: Message = {
             ...messageData,
             id: nanoid(),
             timestamp: new Date().toISOString(),
           };
-          
+
           set((state) => {
             const conversation = state.conversations.find(c => c.id === message.conversationId);
             if (conversation) {
               conversation.messages.push(message);
               conversation.message_count = conversation.messages.length;
               conversation.updated_at = message.timestamp;
-              
+
               if (message.role === 'user') {
                 conversation.last_message_preview = message.content.slice(0, 100);
-                conversation.title = conversation.messages.length === 1 
+                conversation.title = conversation.messages.length === 1
                   ? message.content.slice(0, 50) + (message.content.length > 50 ? '...' : '')
                   : conversation.title;
               }
             }
           });
-          
+
           // Persist to localStorage
           const state = get();
           const conversation = state.conversations.find(c => c.id === message.conversationId);
@@ -174,7 +179,7 @@ export const useChatStore = create<ChatState>()(
             ConversationStore.updateConversationWithMessage(conversation.id, conversation.messages);
           }
         },
-        
+
         updateMessage: (id, updates) => {
           set((state) => {
             for (const conversation of state.conversations) {
@@ -187,7 +192,7 @@ export const useChatStore = create<ChatState>()(
             }
           });
         },
-        
+
         deleteConversation: (id) => {
           set((state) => {
             state.conversations = state.conversations.filter(c => c.id !== id);
@@ -195,10 +200,10 @@ export const useChatStore = create<ChatState>()(
               state.activeConversationId = state.conversations[0]?.id;
             }
           });
-          
+
           ConversationStore.deleteConversation(id);
         },
-        
+
         updateConversationTitle: (id, title) => {
           set((state) => {
             const conversation = state.conversations.find(c => c.id === id);
@@ -207,10 +212,10 @@ export const useChatStore = create<ChatState>()(
               conversation.updated_at = new Date().toISOString();
             }
           });
-          
+
           ConversationStore.updateConversationTitle(id, title);
         },
-        
+
         startStreaming: (traceId) => {
           set((state) => {
             state.streaming = {
@@ -221,7 +226,7 @@ export const useChatStore = create<ChatState>()(
             };
           });
         },
-        
+
         updateStreamingMessage: (content) => {
           set((state) => {
             if (state.streaming.isStreaming) {
@@ -229,7 +234,7 @@ export const useChatStore = create<ChatState>()(
             }
           });
         },
-        
+
         updateAgentStatus: (status) => {
           set((state) => {
             if (state.streaming.isStreaming) {
@@ -237,7 +242,7 @@ export const useChatStore = create<ChatState>()(
             }
           });
         },
-        
+
         stopStreaming: () => {
           set((state) => {
             state.streaming = {
@@ -245,36 +250,36 @@ export const useChatStore = create<ChatState>()(
             };
           });
         },
-        
+
         setSidebarOpen: (open) => {
           set((state) => {
             state.sidebarOpen = open;
           });
         },
-        
+
         setShowReasoningToggle: (show) => {
           set((state) => {
             state.showReasoningToggle = show;
           });
         },
-        
+
         setError: (error) => {
           set((state) => {
             state.error = error;
           });
         },
-        
+
         clearError: () => {
           set((state) => {
             state.error = undefined;
             state.lastFailedMessage = undefined;
           });
         },
-        
+
         retryLastFailedMessage: async () => {
           const state = get();
           if (!state.lastFailedMessage) return;
-          
+
           // Implementation would depend on the API client
           console.log('Retrying message:', state.lastFailedMessage);
         },
@@ -294,24 +299,37 @@ export const useChatStore = create<ChatState>()(
   )
 );
 
-// Convenience hooks
+// Selectors with stable references
 export const useActiveConversation = () => useChatStore((state) => {
-  const activeId = state.activeConversationId;
-  return activeId ? state.conversations.find(c => c.id === activeId) : undefined;
+  const id = state.activeConversationId;
+  return id ? state.conversations.find((c) => c.id === id) : undefined;
 });
 
 export const useStreamingState = () => useChatStore((state) => state.streaming);
 
-export const useChatActions = () => useChatStore((state) => ({
-  createConversation: state.createConversation,
-  selectConversation: state.selectConversation,
-  addMessage: state.addMessage,
-  updateMessage: state.updateMessage,
-  deleteConversation: state.deleteConversation,
-  startStreaming: state.startStreaming,
-  updateStreamingMessage: state.updateStreamingMessage,
-  updateAgentStatus: state.updateAgentStatus,
-  stopStreaming: state.stopStreaming,
-  setError: state.setError,
-  clearError: state.clearError,
-}));
+// Create a stable actions object outside component scope
+let cachedActions: any = null;
+
+export const useChatActions = () => {
+  return useChatStore((state) => {
+    // Only create new actions object if it hasn't been created yet
+    if (!cachedActions) {
+      cachedActions = {
+        createConversation: state.createConversation,
+        selectConversation: state.selectConversation,
+        addMessage: state.addMessage,
+        updateMessage: state.updateMessage,
+        deleteConversation: state.deleteConversation,
+        updateConversationTitle: state.updateConversationTitle,
+        startStreaming: state.startStreaming,
+        updateStreamingMessage: state.updateStreamingMessage,
+        updateAgentStatus: state.updateAgentStatus,
+        stopStreaming: state.stopStreaming,
+        setError: state.setError,
+        clearError: state.clearError,
+        loadConversations: state.loadConversations,
+      };
+    }
+    return cachedActions;
+  });
+};

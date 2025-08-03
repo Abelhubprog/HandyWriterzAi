@@ -1,4 +1,5 @@
 import os
+import logging
 
 from .tools_and_schemas import SearchQueryList, Reflection
 from dotenv import load_dotenv
@@ -30,7 +31,10 @@ from .utils import (
     insert_citation_markers,
     resolve_urls,
 )
-from .nodes.rewrite_agent import RewriteAgent, get_rewrite_agent # Import RewriteAgent
+from .nodes.rewrite_agent import get_rewrite_agent
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -268,7 +272,7 @@ def finalize_answer(state: OverallState, config: RunnableConfig):
         "current_draft": result.content # Set the initial draft for potential rewriting
     }
 
-def evaluate_answer_for_rewrite(state: HandyWriterzState) -> str:
+def evaluate_answer_for_rewrite(state: OverallState) -> str:
     """
     LangGraph routing function to determine if the answer needs rewriting.
     Checks if there are highlighted sections or if Turnitin check failed.
@@ -315,3 +319,12 @@ builder.add_conditional_edges(
 builder.add_edge("rewrite_document", "finalize_answer") # Loop back to re-evaluate after rewrite
 
 graph = builder.compile(name="pro-search-agent")
+
+
+def build_gemini_graph():
+    """Build and return the Gemini graph for simple agent use.
+    
+    Returns:
+        Compiled LangGraph for the simple Gemini agent
+    """
+    return graph

@@ -4,9 +4,8 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Composer } from './Composer/Composer';
 import { MessageBubble } from './MessageBubble';
 import { useChatStream } from '@/lib/useChatStream';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { v4 as uuidv4 } from 'uuid';
+import { useActiveConversation, useStreamingState, useChatActions } from '@/store/useChatStore';
 
 interface Message {
   id: string;
@@ -29,49 +28,85 @@ interface ChatPaneProps {
 }
 
 export function ChatPane({ conversationId, className, onConversationCreate }: ChatPaneProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
-  const [currentConversationId, setCurrentConversationId] = useState<string | undefined>(conversationId);
+  // useActiveConversation returns a conversation object or undefined
+  const activeConversation = useActiveConversation();
+  // useStreamingState returns the streaming state object
+  const streamingState = useStreamingState();
+  // useChatActions returns an object with all action functions
+  const {
+    createConversation,
+    selectConversation,
+    addMessage,
+    updateMessage,
+    deleteConversation,
+    updateConversationTitle,
+    startStreaming,
+    updateStreamingMessage,
+    updateAgentStatus,
+    stopStreaming,
+    setError,
+    clearError,
+    loadConversations,
+  } = useChatActions();
+
+  // Load conversations on mount
+  useEffect(() => {
+    loadConversations();
+  }, [loadConversations]);
+
+  // Select conversation when conversationId changes
+  useEffect(() => {
+    if (conversationId) {
+      selectConversation(conversationId);
+    }
+  }, [conversationId, selectConversation]);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { isStreaming, startStream, stopStream } = useChatStream();
 
-  // Load messages when conversation changes
-  useEffect(() => {
-    console.log('ChatPane: conversationId changed from', currentConversationId, 'to', conversationId);
+  const startSSEStream = useCallback((traceId: string) => {
+    const eventSource = new EventSource(`/api/stream/${traceId}`);
     
-    if (conversationId !== currentConversationId) {
-      setStreamingMessageId(null);
-      setCurrentConversationId(conversationId);
-      
-      if (conversationId) {
-        // Load existing conversation
-        console.log('Loading conversation:', conversationId);
-        import('@/lib/conversationStore').then(({ ConversationStore }) => {
-          const conversation = ConversationStore.getConversation(conversationId);
-          console.log('Loaded conversation:', conversation);
-          if (conversation && conversation.messages) {
-            setMessages(conversation.messages);
-          } else {
-            setMessages([]);
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'workflow_progress') {
+          updateAgentStatus(data.data.current_node || 'Processing...');
+          if (data.data.response) {
+            updateStreamingMessage(data.data.response);
           }
-        });
-      } else {
-        // New conversation
-        console.log('New conversation - clearing messages');
-        setMessages([]);
+        } else if (data.type === 'workflow_complete') {
+          stopStreaming();
+          eventSource.close();
+        } else if (data.type === 'workflow_failed') {
+          updateAgentStatus('Error occurred');
+          stopStreaming();
+          eventSource.close();
+        }
+      } catch (e) {
+        console.error('SSE parsing error:', e);
       }
-    }
-  }, [conversationId, currentConversationId]);
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('SSE error:', error);
+      eventSource.close();
+      stopStreaming();
+    };
+
+    return eventSource;
+  }, [updateAgentStatus, updateStreamingMessage, stopStreaming]);
+
+  // Auto-scroll to bottom when new messages arrive or streaming updates
+  useEffect(() => {
+    scrollToBottom();
+  }, [activeConversation?.messages, streamingState.streamingMessage]);
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
 
   const handleSend = useCallback(async (payload: {
     conversationId: string;
@@ -85,119 +120,121 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
       size: number;
     }>;
   }) => {
+    console.log('Send button clicked with payload:', payload);
+    
     // Prevent sending if already streaming
-    if (isStreaming) {
+    if (streamingState.isStreaming) {
+      console.log('Already streaming, preventing send');
       return;
     }
 
-    // Stop any existing stream
-    stopStream();
-
-    // Add user message
-    const userMessage: Message = {
-      id: uuidv4(),
-      role: 'user',
-      content: payload.content,
-      timestamp: new Date(),
-      attachments: payload.attachments,
-      writeupType: payload.writeupType,
-    };
-
-    // Create assistant message placeholder
-    const assistantMessageId = uuidv4();
-    const assistantMessage: Message = {
-      id: assistantMessageId,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(),
-    };
-
-    // Generate conversation ID if this is a new conversation
-    const actualConversationId = conversationId || uuidv4();
-    
-    // Add both messages at once to prevent race conditions
-    const newMessages = [...messages, userMessage, assistantMessage];
-    setMessages(newMessages);
-    setStreamingMessageId(assistantMessageId);
-
-    // Save to conversation store
-    import('@/lib/conversationStore').then(({ ConversationStore }) => {
-      if (!conversationId) {
-        // Create new conversation
-        ConversationStore.createNewConversation(actualConversationId, userMessage);
-        // Notify parent component of new conversation
-        onConversationCreate?.(actualConversationId);
-        // Update the conversation ID in parent component
-        if (payload.conversationId !== actualConversationId) {
-          payload.conversationId = actualConversationId;
-        }
-      } else {
-        // Update existing conversation
-        ConversationStore.updateConversationWithMessage(actualConversationId, newMessages);
-      }
-    });
-
-    // Start streaming
     try {
-      await startStream('/api/chat/send', payload, {
-        onToken: (token) => {
-          setMessages(prev => {
-            const updated = prev.map(msg =>
-              msg.id === assistantMessageId
-                ? { ...msg, content: msg.content + token }
-                : msg
-            );
-            
-            // Save updated messages to store
-            import('@/lib/conversationStore').then(({ ConversationStore }) => {
-              ConversationStore.updateConversationWithMessage(actualConversationId, updated);
-            });
-            
-            return updated;
-          });
+      // Create conversation if we don't have an active one or it's empty/invalid
+      let currentConversationId = payload.conversationId;
+      
+      if (!activeConversation || !currentConversationId) {
+        // Create a new conversation with the first message
+        currentConversationId = createConversation({
+          role: 'user',
+          content: payload.content,
+          writeupType: payload.writeupType,
+          attachments: payload.attachments,
+        });
+        selectConversation(currentConversationId);
+      } else {
+        // Add user message to existing conversation
+        addMessage({
+          conversationId: currentConversationId,
+          role: 'user',
+          content: payload.content,
+          writeupType: payload.writeupType,
+          attachments: payload.attachments,
+        });
+      }
+
+      // Start streaming
+      const traceId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2));
+      startStreaming(traceId);
+      updateAgentStatus('Processing request...');
+
+      // Send to correct backend endpoint  
+      const requestBody = {
+        prompt: payload.content,
+        mode: payload.writeupType || "general",
+        file_ids: payload.attachments?.map(a => a.url) || [],
+        user_params: { writeupType: payload.writeupType }
+      };
+      
+      console.log('Sending API request to /api/chat:', requestBody);
+      
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        onComplete: () => {
-          setStreamingMessageId(null);
-        },
-        onError: (error) => {
-          console.error('Stream error:', error);
-          setStreamingMessageId(null);
-          // Update the assistant message with error
-          setMessages(prev => {
-            const updated = prev.map(msg =>
-              msg.id === assistantMessageId
-                ? { ...msg, content: 'Sorry, an error occurred while processing your request.' }
-                : msg
-            );
-            
-            // Save error message to store
-            import('@/lib/conversationStore').then(({ ConversationStore }) => {
-              ConversationStore.updateConversationWithMessage(actualConversationId, updated);
-            });
-            
-            return updated;
-          });
-        },
+        body: JSON.stringify(requestBody),
       });
+
+      console.log('API response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error:', response.status, errorText);
+        throw new Error(`API Error: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('API response result:', result);
+      
+      // Handle the response
+      if (result.success !== false) {
+        // Add final assistant message
+        addMessage({
+          conversationId: currentConversationId,
+          role: 'assistant',
+          content: result.response || 'I received your message and processed it successfully.',
+        });
+      } else {
+        throw new Error(result.response || 'Unknown error occurred');
+      }
+
+      // Start SSE stream for real-time updates if trace_id is available
+      if (result.trace_id) {
+        startSSEStream(result.trace_id);
+      }
+
+      stopStreaming();
+
+      // Notify parent if new conversation
+      if (!conversationId) {
+        onConversationCreate?.(currentConversationId);
+      }
+
     } catch (error) {
-      console.error('Failed to start stream:', error);
-      setStreamingMessageId(null);
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.id === assistantMessageId
-            ? { ...msg, content: 'Sorry, an error occurred while processing your request.' }
-            : msg
-        )
-      );
+      console.error('Failed to send message:', error);
+      stopStreaming();
     }
-  }, [isStreaming, startStream, stopStream]);
+  }, [
+    streamingState.isStreaming,
+    streamingState.streamingMessage,
+    addMessage,
+    startStreaming,
+    updateStreamingMessage,
+    updateAgentStatus,
+    stopStreaming,
+    startStream,
+    conversationId,
+    onConversationCreate,
+  ]);
 
   return (
     <div className={cn("h-full flex flex-col", className)}>
       {/* Centered chat interface like ChatGPT */}
       <div className="flex-1 flex items-center justify-center px-4 overflow-hidden">
         <div className="w-full max-w-4xl h-full flex flex-col">
-          {messages.length === 0 ? (
+          {!activeConversation?.messages || activeConversation.messages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="w-full">
                 <div className="text-center text-muted-foreground mb-8">
@@ -206,9 +243,9 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
                 </div>
                 <div className="w-full max-w-3xl mx-auto">
                   <Composer
-                    conversationId={conversationId || uuidv4()}
+                    conversationId="new-chat"
                     onSend={handleSend}
-                    disabled={isStreaming}
+                    disabled={streamingState.isStreaming}
                   />
                 </div>
               </div>
@@ -216,34 +253,58 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
           ) : (
             <>
               <div className="flex-1 overflow-hidden">
-                <ScrollArea ref={scrollAreaRef} className="h-full [&>div>div]:!pr-6" style={{ scrollbarGutter: 'stable' }}>
-                  <div className="py-8 space-y-6 pr-4">
-                    {messages.map((message) => (
+                <div 
+                  ref={scrollAreaRef}
+                  className="h-full overflow-y-auto pr-4"
+                  style={{ scrollbarGutter: 'stable' }}
+                >
+                  <div className="py-8 space-y-6">
+                    {activeConversation?.messages.map((message) => (
                       <MessageBubble
                         key={message.id}
                         message={{
                           id: message.id,
                           type: message.role === 'user' ? 'human' : 'ai',
                           content: message.content,
-                          timestamp: message.timestamp instanceof Date 
-                            ? message.timestamp.toISOString() 
-                            : typeof message.timestamp === 'string' 
-                              ? message.timestamp 
-                              : new Date().toISOString(),
+                          timestamp: typeof message.timestamp === 'string'
+                            ? message.timestamp
+                            : new Date(message.timestamp).toISOString(),
                         }}
-                        isLast={message.id === messages[messages.length - 1]?.id}
+                        isLast={message.id === activeConversation.messages[activeConversation.messages.length - 1]?.id}
                       />
                     ))}
+
+                    {/* Show streaming message */}
+                    {streamingState.isStreaming && streamingState.streamingMessage && (
+                      <MessageBubble
+                        message={{
+                          id: 'streaming',
+                          type: 'ai',
+                          content: streamingState.streamingMessage,
+                          timestamp: new Date().toISOString(),
+                        }}
+                        isLast={true}
+                      />
+                    )}
+
+                    {/* Show agent status */}
+                    {streamingState.isStreaming && streamingState.agentStatus && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground px-4">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                        <span>{streamingState.agentStatus}</span>
+                      </div>
+                    )}
+
                     <div ref={messagesEndRef} />
                   </div>
-                </ScrollArea>
+                </div>
               </div>
-              
+
               <div className="flex-shrink-0 pt-4">
                 <Composer
-                  conversationId={conversationId || uuidv4()}
+                  conversationId={activeConversation?.id || "continue-chat"}
                   onSend={handleSend}
-                  disabled={isStreaming}
+                  disabled={streamingState.isStreaming}
                 />
               </div>
             </>

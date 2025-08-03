@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { shallow } from 'zustand/shallow';
 
 export interface Toast {
   id: string;
@@ -218,32 +219,38 @@ export const useUIStore = create<UIState>()(
   )
 );
 
-// Convenience hooks
-export const useModals = () => useUIStore((state) => ({
+// Stable selectors to prevent infinite loops
+const modalsSelector = (state: UIState) => ({
   activeModals: state.activeModals,
   openModal: state.openModal,
   closeModal: state.closeModal,
   closeAllModals: state.closeAllModals,
-}));
+});
 
-export const useToasts = () => useUIStore((state) => ({
+const toastsSelector = (state: UIState) => ({
   toasts: state.toasts,
   addToast: state.addToast,
   removeToast: state.removeToast,
   clearToasts: state.clearToasts,
-}));
+});
 
-export const useLoading = () => useUIStore((state) => ({
+const loadingSelector = (state: UIState) => ({
   globalLoading: state.globalLoading,
   setGlobalLoading: state.setGlobalLoading,
   setLoading: state.setLoading,
   isLoading: state.isLoading,
-}));
+});
 
-export const useFileUpload = () => useUIStore((state) => ({
+const fileUploadSelector = (state: UIState) => ({
   isDraggingFiles: state.isDraggingFiles,
   uploadProgress: state.uploadProgress,
   setIsDraggingFiles: state.setIsDraggingFiles,
   setUploadProgress: state.setUploadProgress,
   removeUploadProgress: state.removeUploadProgress,
-}));
+});
+
+// Convenience hooks with shallow comparison
+export const useModals = () => useUIStore(modalsSelector, shallow);
+export const useToasts = () => useUIStore(toastsSelector, shallow);
+export const useLoading = () => useUIStore(loadingSelector, shallow);
+export const useFileUpload = () => useUIStore(fileUploadSelector, shallow);

@@ -740,7 +740,7 @@ class WorkbenchArtifact(Base):
     mime_type = Column(String(255), nullable=True)
     checksum_sha256 = Column(String(128), nullable=True, index=True)
 
-    metadata = Column(JSONB, nullable=True)
+    artifact_metadata = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     assignment = relationship("WorkbenchAssignment", back_populates="artifacts")
