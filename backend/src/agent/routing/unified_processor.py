@@ -33,7 +33,8 @@ except Exception:  # pragma: no cover
 _FEATURE_SSE = os.getenv("FEATURE_SSE_PUBLISHER_UNIFIED", "false").lower() == "true"
 _FEATURE_PARAMS = os.getenv("FEATURE_PARAMS_NORMALIZATION", "false").lower() == "true"
 
-_sse_pub: Optional["SSEPublisher"] = None
+from typing import Any as _Any
+_sse_pub: Optional[_Any] = None
 if _FEATURE_SSE and SSEPublisher is not None:
     try:
         _sse_pub = SSEPublisher(async_redis=redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379")))
@@ -400,42 +401,44 @@ class UnifiedProcessor:
                 validated_params = self._infer_user_params(message)
 
             # Create advanced state
-            state = HandyWriterzState(
-                conversation_id=conversation_id,
-                user_id=user_id or "",
-                wallet_address=None,
-                messages=[HumanMessage(content=message)],
-                user_params=validated_params.dict(),
-                uploaded_docs=files,
-                outline=None,
-                research_agenda=[],
-                search_queries=[],
-                raw_search_results=[],
-                filtered_sources=[],
-                verified_sources=[],
-                draft_content=None,
-                current_draft=None,
-                revision_count=0,
-                evaluation_results=[],
-                evaluation_score=None,
-                turnitin_reports=[],
-                turnitin_passed=False,
-                formatted_document=None,
-                learning_outcomes_report=None,
-                download_urls={},
-                current_node=None,
-                workflow_status="initiated",
-                error_message=None,
-                retry_count=0,
-                max_iterations=5,
-                enable_tutor_review=False,
-                start_time=time.time(),
-                end_time=None,
-                processing_metrics={},
-                auth_token=None,
-                payment_transaction_id=None,
-                uploaded_files=[{"content": f.get("content", ""), "filename": f.get("filename", "")} for f in files]
-            )
+            # Construct via kwargs dictionary to avoid Pylance false negatives on dataclass analysis
+            _state_kwargs = {
+                "conversation_id": conversation_id,
+                "user_id": user_id or "",
+                "wallet_address": None,
+                "messages": [HumanMessage(content=message)],
+                "user_params": validated_params.dict(),
+                "uploaded_docs": files,
+                "outline": None,
+                "research_agenda": [],
+                "search_queries": [],
+                "raw_search_results": [],
+                "filtered_sources": [],
+                "verified_sources": [],
+                "draft_content": None,
+                "current_draft": None,
+                "revision_count": 0,
+                "evaluation_results": [],
+                "evaluation_score": None,
+                "turnitin_reports": [],
+                "turnitin_passed": False,
+                "formatted_document": None,
+                "learning_outcomes_report": None,
+                "download_urls": {},
+                "current_node": None,
+                "workflow_status": "initiated",
+                "error_message": None,
+                "retry_count": 0,
+                "max_iterations": 5,
+                "enable_tutor_review": False,
+                "start_time": time.time(),
+                "end_time": None,
+                "processing_metrics": {},
+                "auth_token": None,
+                "payment_transaction_id": None,
+                "uploaded_files": [{"content": f.get("content", ""), "filename": f.get("filename", "")} for f in files],
+            }
+            state = HandyWriterzState(**_state_kwargs)  # type: ignore[arg-type]
 
             # Execute the workflow
             config = {"configurable": {"thread_id": conversation_id}}

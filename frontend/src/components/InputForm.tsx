@@ -76,7 +76,8 @@ const InputFormComponent: React.FC<InputFormProps> = ({
     }
   }, [handleInternalSubmit]);
 
-  const isSubmitDisabled = (!internalInputValue.trim() && fileIds.length === 0) || isLoading;
+  // Activate send when either text OR files are present, and guard while loading
+  const isSubmitDisabled = (internalInputValue.trim().length === 0 && fileIds.length === 0) || isLoading;
 
   const handleTakeScreenshot = async () => {
     try {
@@ -85,12 +86,12 @@ const InputFormComponent: React.FC<InputFormProps> = ({
         video: true,
         audio: false
       });
-      
+
       // Create a video element to capture the screenshot
       const video = document.createElement('video');
       video.srcObject = stream;
       video.play();
-      
+
       video.onloadedmetadata = () => {
         // Create canvas to capture the frame
         const canvas = document.createElement('canvas');
@@ -98,7 +99,7 @@ const InputFormComponent: React.FC<InputFormProps> = ({
         canvas.height = video.videoHeight;
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(video, 0, 0);
-        
+
         // Convert to blob and add to files
         canvas.toBlob((blob) => {
           if (blob) {
@@ -107,7 +108,7 @@ const InputFormComponent: React.FC<InputFormProps> = ({
             console.log('Screenshot captured:', file);
           }
         }, 'image/png');
-        
+
         // Stop the stream
         stream.getTracks().forEach(track => track.stop());
       };
@@ -122,12 +123,12 @@ const InputFormComponent: React.FC<InputFormProps> = ({
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' }
       });
-      
+
       // Create a video element to show camera feed
       const video = document.createElement('video');
       video.srcObject = stream;
       video.play();
-      
+
       // Create a modal or inline camera interface
       // For now, we'll auto-capture after a short delay
       setTimeout(() => {
@@ -136,7 +137,7 @@ const InputFormComponent: React.FC<InputFormProps> = ({
         canvas.height = video.videoHeight;
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(video, 0, 0);
-        
+
         canvas.toBlob((blob) => {
           if (blob) {
             const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
@@ -144,11 +145,11 @@ const InputFormComponent: React.FC<InputFormProps> = ({
             console.log('Photo captured:', file);
           }
         }, 'image/jpeg');
-        
+
         // Stop the stream
         stream.getTracks().forEach(track => track.stop());
       }, 3000); // 3 second delay for user to position camera
-      
+
     } catch (error) {
       console.error('Error taking photo:', error);
     }
@@ -167,7 +168,7 @@ const InputFormComponent: React.FC<InputFormProps> = ({
     <div className="w-full max-w-4xl mx-auto">
       <div className="flex flex-col gap-4 p-6">
         {showUploader && <ContextUploader onFileIdsChange={setFileIds} />}
-        
+
         {/* Main input container */}
         <div className="relative">
           <div className="relative bg-gray-800 rounded-2xl border border-gray-700 p-1">
@@ -222,7 +223,7 @@ const InputFormComponent: React.FC<InputFormProps> = ({
                   className="w-full bg-transparent border-none px-2 py-3 text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-0 min-h-[56px] overflow-y-auto"
                   rows={1}
                   aria-label="Prompt"
-                  style={{ 
+                  style={{
                     maxHeight: '300px',
                     wordWrap: 'break-word',
                     whiteSpace: 'pre-wrap'
@@ -234,11 +235,20 @@ const InputFormComponent: React.FC<InputFormProps> = ({
               <div className="flex items-center gap-2 mt-3 mr-3">
                 <MicButton onTranscript={setInternalInputValue} />
                 <Button
-                  type="submit"
+                  type="button"
                   size="icon"
                   className="rounded-full bg-white text-black p-2 h-10 w-10 hover:bg-gray-200 active:scale-95 transition disabled:opacity-50"
                   disabled={isSubmitDisabled}
-                  onClick={handleInternalSubmit}
+                  onClick={() => {
+                    try {
+                      handleInternalSubmit();
+                    } catch (err) {
+                      // Basic error hardening to avoid "Failed to fetch" unhandled rejections
+                      console.error("Send failed:", err);
+                      alert("Failed to send. Please check your connection and try again.");
+                    }
+                  }}
+                  aria-label={isLoading ? "Cancel" : "Send"}
                 >
                   {isLoading ? (
                     <StopCircle className="h-6 w-6 text-red-500" onClick={onCancel} />
