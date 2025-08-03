@@ -4,9 +4,9 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { traceId: string } }
+  context: { params: Promise<{ traceId: string }> }
 ) {
-  const { traceId } = params;
+  const { traceId } = await context.params;
 
   // Create a TransformStream for SSE
   const encoder = new TextEncoder();
