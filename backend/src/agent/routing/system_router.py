@@ -20,11 +20,12 @@ class SystemRouter:
     Analyzes request complexity and routes to the most appropriate system.
     """
     
-    def __init__(self, simple_available: bool = True, advanced_available: bool = True):
-        self.simple_available = simple_available
+    def __init__(self, simple_available: bool = False, advanced_available: bool = True):
+        # Simple system permanently disabled 
+        self.simple_available = False
         self.advanced_available = advanced_available
         
-        # Configuration thresholds
+        # Configuration thresholds (no longer used but kept for compatibility)
         self.simple_max_complexity = float(os.getenv("SIMPLE_MAX_COMPLEXITY", "4.0"))
         self.advanced_min_complexity = float(os.getenv("ADVANCED_MIN_COMPLEXITY", "7.0"))
         
@@ -32,9 +33,9 @@ class SystemRouter:
         self.complexity_analyzer = ComplexityAnalyzer()
         
         logger.info("🎯 SystemRouter initialized:")
-        logger.info(f"   Simple system: {'Available' if self.simple_available else 'Unavailable'}")
+        logger.info(f"   Simple system: Permanently disabled")
         logger.info(f"   Advanced system: {'Available' if self.advanced_available else 'Unavailable'}")
-        logger.info(f"   Complexity thresholds: {self.simple_max_complexity} < hybrid < {self.advanced_min_complexity}")
+        logger.info(f"   All requests route to advanced system")
         
     async def analyze_request(self, message: str, files: List = None, user_params: dict = None) -> Dict[str, Any]:
         """
@@ -59,64 +60,13 @@ class SystemRouter:
         # Calculate complexity score (1-10 scale)
         complexity_score = await self.complexity_analyzer.calculate_complexity(message, files, user_params)
         
-        # Determine routing based on availability and complexity
-        if not self.simple_available:
-            return {
-                "system": "advanced",
-                "complexity": complexity_score,
-                "reason": "simple_system_unavailable",
-                "confidence": 1.0
-            }
-        
-        if not self.advanced_available:
-            return {
-                "system": "simple",
-                "complexity": complexity_score,
-                "reason": "advanced_system_unavailable", 
-                "confidence": 1.0
-            }
-        
-        # Academic writing indicators (always route to advanced)
-        if self.complexity_analyzer.is_academic_writing_request(message, user_params):
-            return {
-                "system": "advanced", 
-                "complexity": complexity_score,
-                "reason": "academic_writing_detected",
-                "confidence": 0.95
-            }
-        
-        # File processing (prefer advanced for better handling)
-        if len(files) > 0:
-            return {
-                "system": "advanced" if complexity_score >= 5.0 else "hybrid",
-                "complexity": complexity_score,
-                "reason": "file_processing_required",
-                "confidence": 0.85
-            }
-        
-        # Complexity-based routing
-        if complexity_score <= self.simple_max_complexity:
-            return {
-                "system": "simple",
-                "complexity": complexity_score,
-                "reason": "low_complexity_query",
-                "confidence": 0.8
-            }
-        elif complexity_score >= self.advanced_min_complexity:
-            return {
-                "system": "advanced",
-                "complexity": complexity_score,
-                "reason": "high_complexity_query", 
-                "confidence": 0.9
-            }
-        else:
-            # Middle complexity - use hybrid approach
-            return {
-                "system": "hybrid",
-                "complexity": complexity_score,
-                "reason": "medium_complexity_query",
-                "confidence": 0.7
-            }
+        # Always route to advanced system (simple and hybrid systems removed)
+        return {
+            "system": "advanced",
+            "complexity": complexity_score,
+            "reason": "simple_and_hybrid_systems_removed",
+            "confidence": 1.0
+        }
     
     def get_routing_stats(self) -> Dict[str, Any]:
         """Get routing statistics and configuration."""

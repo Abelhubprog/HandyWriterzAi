@@ -5,6 +5,7 @@ from .task import Task
 from .policy_core import policy_registry, TaskPolicy, CandidateModel
 from .factory import get_provider
 from .base import ChatMessage
+from src.services.policy_loader import get_orchestrator_policies, TaskType
 
 
 @dataclass
@@ -43,12 +44,27 @@ class ChatOrchestrator:
                 if cand.provider == model_hint:
                     return SelectionResult(provider_name=cand.provider, model_hint=cand.model, reason="provider_hint")
 
-        # Enforce: Gemini allowed ONLY for GENERAL_CHAT
-        candidates: List[CandidateModel]
-        if task is not Task.GENERAL_CHAT:
-            candidates = [c for c in policy.candidates if c.provider != "gemini"]
-        else:
-            candidates = list(policy.candidates)
+        # Apply externalized provider restrictions based on task type
+        policies = get_orchestrator_policies()
+        task_type_map = {
+            Task.GENERAL_CHAT: "GENERAL",
+            Task.ACADEMIC_WRITING: "ACADEMIC_WRITING", 
+            Task.RESEARCH: "RESEARCH",
+            Task.CODE_ANALYSIS: "CODE_ANALYSIS",
+            Task.CREATIVE_WRITING: "CREATIVE_WRITING"
+        }
+        
+        task_type = task_type_map.get(task, "GENERAL")
+        candidates: List[CandidateModel] = []
+        
+        for candidate in policy.candidates:
+            if policies.is_provider_allowed(candidate.provider, task_type):
+                candidates.append(candidate)
+            else:
+                # Log policy-based exclusion for debugging
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.debug(f"Provider {candidate.provider} excluded for task {task_type} by policy")
 
         if not candidates:
             return SelectionResult(provider_name=None, model_hint=None, reason="fallback_default")

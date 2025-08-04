@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useStream } from './useStream';
 import { useFileUpload } from './useFileUpload';
+import { apiClient } from '../services/advancedApiClient';
 
 export interface ChatMessage {
   id: string;
@@ -167,26 +168,28 @@ export const useAdvancedChat = (options: UseAdvancedChatOptions = {}) => {
       
       abortControllerRef.current = new AbortController();
       
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-          'X-Session-ID': sessionId || 'new'
-        },
-        body: JSON.stringify(request),
-        signal: abortControllerRef.current.signal
-      });
+      // Use AdvancedApiClient to call backend directly
+      const { data } = await apiClient.chat(request);
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      return response.json();
+      // Transform backend response to expected ChatResponse format
+      return {
+        success: data.success !== false,
+        response: data.message || '',
+        sources: data.sources || [],
+        workflow_status: data.status || 'completed',
+        system_used: 'advanced',
+        complexity_score: data.complexity_score || 0,
+        routing_reason: data.routing_reason || 'Advanced processing',
+        routing_confidence: data.routing_confidence || 1.0,
+        processing_time: data.processing_time || 0,
+        conversation_id: data.trace_id || data.conversation_id,
+        citation_count: data.citation_count || 0,
+        agent_metrics: data.agent_metrics || {}
+      };
     },
     onSuccess: (response) => {
-      setCurrentTraceId(response.conversation_id || Date.now().toString());
+      const traceId = response.conversation_id || Date.now().toString();
+      setCurrentTraceId(traceId);
       setEstimatedCost(0); // Backend doesn't provide cost estimate
       setEstimatedTime(response.processing_time || 0);
       setRoutingDecision({
@@ -196,24 +199,51 @@ export const useAdvancedChat = (options: UseAdvancedChatOptions = {}) => {
       });
       setRetryCount(0);
       
-      // Add AI response message if we have content
-      if (response.response) {
-        const aiMessage: ChatMessage = {
-          id: response.conversation_id || Date.now().toString(),
-          type: 'ai',
-          content: response.response,
-          timestamp: Date.now(),
-          metadata: {
-            model: response.system_used,
-            cost: 0,
-            processing_time: response.processing_time,
-            sources: response.sources,
-            quality_score: response.complexity_score
+      // Create placeholder AI message for streaming
+      const aiMessage: ChatMessage = {
+        id: traceId,
+        type: 'ai',
+        content: '', // Will be populated by streaming
+        timestamp: Date.now(),
+        metadata: {
+          model: response.system_used,
+          cost: 0,
+          processing_time: response.processing_time,
+          sources: response.sources,
+          quality_score: response.complexity_score
+        }
+      };
+      
+      setMessages(prev => [...prev, aiMessage]);
+      onMessage?.(aiMessage);
+      
+      // Start streaming from backend SSE endpoint
+      if (traceId) {
+        console.log('Starting SSE stream for trace:', traceId);
+        apiClient.streamResponse(`/api/stream/${traceId}`, { method: 'GET' }, (chunk) => {
+          console.log('SSE chunk received:', chunk);
+          
+          if (chunk.type === 'token' && chunk.delta) {
+            // Update the AI message content with streaming text
+            setMessages(prev => prev.map(msg => 
+              msg.id === traceId 
+                ? { ...msg, content: msg.content + chunk.delta }
+                : msg
+            ));
           }
-        };
-        
-        setMessages(prev => [...prev, aiMessage]);
-        onMessage?.(aiMessage);
+          
+          if (chunk.type === 'workflow_finished') {
+            setIsProcessing(false);
+            console.log('Workflow finished');
+          }
+          
+          if (chunk.type === 'error') {
+            handleError(new Error(chunk.error || 'Unknown streaming error'));
+          }
+        }).catch(error => {
+          console.error('SSE streaming error:', error);
+          handleError(error);
+        });
       }
     },
     onError: (error) => {
@@ -279,25 +309,11 @@ export const useAdvancedChat = (options: UseAdvancedChatOptions = {}) => {
     setMessages(prev => [...prev, userMessage]);
     onMessage?.(userMessage);
     
-    // Get uploaded file IDs
+    // Get uploaded file IDs - these will be included in the chat request
     const fileIds = getFileIds();
-
+    
     if (fileIds.length > 0) {
-      console.log('Processing files:', fileIds);
-      // Call the new endpoint to process files
-      try {
-        const processResponse = await fetch('/api/process-files', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ file_ids: fileIds }),
-        });
-        const processResult = await processResponse.json();
-        console.log('File processing started:', processResult);
-        // In a full implementation, we would wait for a callback here.
-      } catch (error) {
-        console.error('Failed to initiate file processing:', error);
-        // Handle error appropriately
-      }
+      console.log('Including files in chat request:', fileIds);
     }
     
     // Prepare request

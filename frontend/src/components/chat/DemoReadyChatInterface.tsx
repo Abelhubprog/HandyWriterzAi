@@ -212,10 +212,12 @@ Please process all uploaded files and integrate their content strategically thro
         // in the actual implementation as they're not part of the options interface
       });
 
-      // Simulate processing completion after demo duration
-      setTimeout(() => {
-        simulateCompletion();
-      }, 13.5 * 60 * 1000);
+      // Simulate processing completion after demo duration (only in demo mode)
+      if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') {
+        setTimeout(() => {
+          simulateCompletion();
+        }, 13.5 * 60 * 1000);
+      }
 
     } catch (error) {
       console.error('Processing failed:', error);

@@ -128,7 +128,7 @@ export function Composer({ conversationId, onSend, disabled = false, className }
     });
 
     try {
-      const uploadResponse = await fetch('/api/upload', {
+      const uploadResponse = await fetch('/api/files/upload', {
         method: 'POST',
         body: formData,
       });

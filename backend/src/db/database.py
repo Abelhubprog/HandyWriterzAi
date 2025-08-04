@@ -18,20 +18,20 @@ logger = logging.getLogger(__name__)
 
 class DatabaseManager:
     """Revolutionary database manager with sophisticated connection handling."""
-    
+
     def __init__(self):
         self.database_url = os.getenv("DATABASE_URL")
         if not self.database_url:
             raise ValueError("DATABASE_URL environment variable is not set")
-        
+
         # Handle different database URL formats
         if self.database_url.startswith("postgres://"):
             self.database_url = self.database_url.replace("postgres://", "postgresql://", 1)
-        
+
         # Create synchronous engine
         self.engine = self._create_engine()
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
-        
+
         # Create asynchronous engine for async operations (only for PostgreSQL)
         if "sqlite" not in self.database_url:
             async_url = self.database_url.replace("postgresql://", "postgresql+asyncpg://")
@@ -43,17 +43,17 @@ class DatabaseManager:
             # SQLite doesn't support async operations well
             self.async_engine = None
             self.AsyncSessionLocal = None
-        
+
         # Initialize database
         self._init_database()
-    
+
     def _create_engine(self) -> Engine:
         """Create SQLAlchemy engine with optimized settings."""
         engine_kwargs = {
             "echo": os.getenv("DB_ECHO", "false").lower() == "true",
             "pool_pre_ping": True,
         }
-        
+
         # For SQLite (development/testing)
         if "sqlite" in self.database_url:
             engine_kwargs.update({
@@ -67,23 +67,23 @@ class DatabaseManager:
                 "pool_size": 10,
                 "max_overflow": 20,
             })
-        
+
         return create_engine(self.database_url, **engine_kwargs)
-    
+
     def _init_database(self):
         """Initialize database tables and indexes."""
         try:
             # Create all tables
             Base.metadata.create_all(bind=self.engine)
             logger.info("Database tables created successfully")
-            
+
             # Create additional indexes for performance
             self._create_performance_indexes()
-            
+
         except Exception as e:
             logger.error(f"Database initialization failed: {e}")
             raise
-    
+
     def _create_performance_indexes(self):
         """Create additional performance indexes."""
         try:
@@ -95,17 +95,17 @@ class DatabaseManager:
                         CREATE INDEX IF NOT EXISTS idx_conversations_user_status
                         ON conversations(user_id, workflow_status);
                     """)
-                    
+
                     conn.execute("""
                         CREATE INDEX IF NOT EXISTS idx_documents_user_created
                         ON documents(user_id, created_at DESC);
                     """)
-                    
+
                     conn.execute("""
                         CREATE INDEX IF NOT EXISTS idx_source_cache_url_hash
                         ON source_cache(MD5(url));
                     """)
-                    
+
                     conn.execute("""
                         CREATE INDEX IF NOT EXISTS idx_system_metrics_time_category
                         ON system_metrics(recorded_at DESC, metric_category);
@@ -116,23 +116,23 @@ class DatabaseManager:
                         CREATE INDEX IF NOT EXISTS idx_conversations_user_status
                         ON conversations(user_id, workflow_status);
                     """)
-                    
+
                     conn.execute("""
                         CREATE INDEX IF NOT EXISTS idx_documents_user_created
                         ON documents(user_id, created_at);
                     """)
-                    
+
                     conn.execute("""
                         CREATE INDEX IF NOT EXISTS idx_system_metrics_time_category
                         ON system_metrics(recorded_at, metric_category);
                     """)
-                
+
                 conn.commit()
                 logger.info("Performance indexes created successfully")
-                
+
         except Exception as e:
             logger.warning(f"Could not create performance indexes: {e}")
-    
+
     def get_db_session(self) -> Generator[Session, None, None]:
         """Get database session with automatic cleanup."""
         db = self.SessionLocal()
@@ -144,7 +144,7 @@ class DatabaseManager:
             raise
         finally:
             db.close()
-    
+
     @contextmanager
     def get_db_context(self) -> Generator[Session, None, None]:
         """Context manager for database sessions."""
@@ -158,13 +158,13 @@ class DatabaseManager:
             raise
         finally:
             db.close()
-    
+
     async def get_async_session(self) -> AsyncSession:
         """Get async database session."""
         if self.AsyncSessionLocal is None:
             raise NotImplementedError("Async sessions not supported with SQLite")
         return self.AsyncSessionLocal()
-    
+
     @contextmanager
     async def get_async_context(self) -> Generator[AsyncSession, None, None]:
         """Async context manager for database sessions."""
@@ -178,7 +178,7 @@ class DatabaseManager:
                 await session.rollback()
                 logger.error(f"Async database context error: {e}")
                 raise
-    
+
     def health_check(self) -> bool:
         """Check database connection health."""
         try:
@@ -188,7 +188,7 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Database health check failed: {e}")
             return False
-    
+
     async def async_health_check(self) -> bool:
         """Async database health check."""
         if self.async_engine is None:
@@ -201,7 +201,7 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Async database health check failed: {e}")
             return False
-    
+
     def close(self):
         """Close database connections."""
         try:
@@ -215,10 +215,10 @@ class DatabaseManager:
 
 class UserRepository:
     """Revolutionary user repository with sophisticated user management."""
-    
+
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
-    
+
     def create_user(self, wallet_address: str, **kwargs) -> User:
         """Create a new user with comprehensive profiling."""
         with self.db_manager.get_db_context() as db:
@@ -226,27 +226,27 @@ class UserRepository:
             existing_user = db.query(User).filter(User.wallet_address == wallet_address).first()
             if existing_user:
                 return existing_user
-            
+
             user = User(
                 wallet_address=wallet_address,
                 **kwargs
             )
             db.add(user)
             db.flush()  # Get the ID
-            
+
             logger.info(f"Created new user: {user.id}")
             return user
-    
+
     def get_user_by_wallet(self, wallet_address: str) -> Optional[User]:
         """Get user by wallet address."""
         with self.db_manager.get_db_context() as db:
             return db.query(User).filter(User.wallet_address == wallet_address).first()
-    
+
     def get_user_by_id(self, user_id: str) -> Optional[User]:
         """Get user by ID."""
         with self.db_manager.get_db_context() as db:
             return db.query(User).filter(User.id == user_id).first()
-    
+
     def update_user_stats(self, user_id: str, **kwargs):
         """Update user statistics and metrics."""
         with self.db_manager.get_db_context() as db:
@@ -260,10 +260,10 @@ class UserRepository:
 
 class ConversationRepository:
     """Revolutionary conversation repository with workflow state management."""
-    
+
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
-    
+
     def create_conversation(self, user_id: str, user_params: dict, **kwargs) -> Conversation:
         """Create a new conversation with initial parameters."""
         with self.db_manager.get_db_context() as db:
@@ -274,15 +274,15 @@ class ConversationRepository:
             )
             db.add(conversation)
             db.flush()
-            
+
             logger.info(f"Created conversation: {conversation.id}")
             return conversation
-    
+
     def get_conversation(self, conversation_id: str) -> Optional[Conversation]:
         """Get conversation by ID."""
         with self.db_manager.get_db_context() as db:
             return db.query(Conversation).filter(Conversation.id == conversation_id).first()
-    
+
     def update_conversation_state(self, conversation_id: str, **kwargs):
         """Update conversation workflow state."""
         with self.db_manager.get_db_context() as db:
@@ -292,7 +292,7 @@ class ConversationRepository:
                     if hasattr(conversation, key):
                         setattr(conversation, key, value)
                 logger.debug(f"Updated conversation state: {conversation_id}")
-    
+
     def get_user_conversations(self, user_id: str, limit: int = 50):
         """Get user's conversations."""
         with self.db_manager.get_db_context() as db:
@@ -305,10 +305,10 @@ class ConversationRepository:
 
 class DocumentRepository:
     """Revolutionary document repository with comprehensive academic metadata."""
-    
+
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
-    
+
     def create_document(self, user_id: str, conversation_id: str, **kwargs) -> Document:
         """Create a new document with comprehensive metadata."""
         with self.db_manager.get_db_context() as db:
@@ -319,15 +319,15 @@ class DocumentRepository:
             )
             db.add(document)
             db.flush()
-            
+
             logger.info(f"Created document: {document.id}")
             return document
-    
+
     def get_document(self, document_id: str) -> Optional[Document]:
         """Get document by ID."""
         with self.db_manager.get_db_context() as db:
             return db.query(Document).filter(Document.id == document_id).first()
-    
+
     def update_document(self, document_id: str, **kwargs):
         """Update document with new data."""
         with self.db_manager.get_db_context() as db:
@@ -337,7 +337,7 @@ class DocumentRepository:
                     if hasattr(document, key):
                         setattr(document, key, value)
                 logger.debug(f"Updated document: {document_id}")
-    
+
     def get_user_documents(self, user_id: str, limit: int = 50):
         """Get user's documents."""
         with self.db_manager.get_db_context() as db:
@@ -346,7 +346,7 @@ class DocumentRepository:
                     .order_by(Document.created_at.desc())\
                     .limit(limit)\
                     .all()
-    
+
     def get_by_conversation_and_type(self, conversation_id: str, document_type: str) -> Optional[Document]:
         """Get document by conversation ID and document type."""
         with self.db_manager.get_db_context() as db:
@@ -354,7 +354,7 @@ class DocumentRepository:
                     .filter(Document.conversation_id == conversation_id)\
                     .filter(Document.document_type == document_type)\
                     .first()
-    
+
     def get_conversation_documents(self, conversation_id: str) -> list[Document]:
         """Get all documents for a conversation."""
         with self.db_manager.get_db_context() as db:
@@ -408,6 +408,11 @@ document_repo = property(lambda self: get_document_repo())
 # Dependency injection for FastAPI
 def get_database() -> Generator[Session, None, None]:
     """Dependency for FastAPI route handlers."""
+    yield from get_db_manager().get_db_session()
+
+# Backwards compatibility alias expected by many API modules
+def get_db() -> Generator[Session, None, None]:
+    """Alias to match older DI usage in routers."""
     yield from get_db_manager().get_db_session()
 
 

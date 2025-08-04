@@ -219,7 +219,52 @@ class AdvancedLLMService:
         return self.clients[model_name]
     
     def _check_rate_limit(self, model_name: str, estimated_tokens: int = 0) -> bool:
-        """Check if request is within rate limits."""
+        """Check if request is within rate limits using Redis for distributed tracking."""
+        if self.redis_client:
+            return self._check_rate_limit_redis(model_name, estimated_tokens)
+        else:
+            return self._check_rate_limit_memory(model_name, estimated_tokens)
+    
+    def _check_rate_limit_redis(self, model_name: str, estimated_tokens: int = 0) -> bool:
+        """Redis-based distributed rate limiting."""
+        config = self.models[model_name]
+        current_time = time.time()
+        minute_window = int(current_time // 60)
+        
+        # Redis keys for rate limiting
+        requests_key = f"rate_limit:requests:{model_name}:{minute_window}"
+        tokens_key = f"rate_limit:tokens:{model_name}:{minute_window}"
+        
+        try:
+            # Use Redis pipeline for atomic operations
+            pipe = self.redis_client.pipeline()
+            
+            # Get current counts
+            pipe.get(requests_key)
+            pipe.get(tokens_key)
+            results = pipe.execute()
+            
+            current_requests = int(results[0] or 0)
+            current_tokens = int(results[1] or 0)
+            
+            # Check limits
+            if current_requests >= config.rate_limit_rpm:
+                logger.warning(f"Rate limit exceeded for {model_name}: {current_requests} >= {config.rate_limit_rpm} RPM")
+                return False
+            
+            if current_tokens + estimated_tokens > config.rate_limit_tpm:
+                logger.warning(f"Token limit exceeded for {model_name}: {current_tokens + estimated_tokens} >= {config.rate_limit_tpm} TPM")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Redis rate limit check failed: {e}")
+            # Fallback to memory-based rate limiting
+            return self._check_rate_limit_memory(model_name, estimated_tokens)
+    
+    def _check_rate_limit_memory(self, model_name: str, estimated_tokens: int = 0) -> bool:
+        """In-memory rate limiting fallback."""
         config = self.models[model_name]
         rate_limiter = self.rate_limiters[model_name]
         current_time = time.time()
@@ -246,7 +291,42 @@ class AdvancedLLMService:
         return True
     
     def _update_rate_limit(self, model_name: str, tokens_used: int):
-        """Update rate limit counters."""
+        """Update rate limit counters using Redis or memory fallback."""
+        if self.redis_client:
+            self._update_rate_limit_redis(model_name, tokens_used)
+        else:
+            self._update_rate_limit_memory(model_name, tokens_used)
+    
+    def _update_rate_limit_redis(self, model_name: str, tokens_used: int):
+        """Update Redis-based rate limit counters."""
+        current_time = time.time()
+        minute_window = int(current_time // 60)
+        
+        # Redis keys for rate limiting
+        requests_key = f"rate_limit:requests:{model_name}:{minute_window}"
+        tokens_key = f"rate_limit:tokens:{model_name}:{minute_window}"
+        
+        try:
+            # Use Redis pipeline for atomic updates
+            pipe = self.redis_client.pipeline()
+            
+            # Increment counters
+            pipe.incr(requests_key, 1)
+            pipe.incr(tokens_key, tokens_used)
+            
+            # Set expiration (2 minutes to handle edge cases)
+            pipe.expire(requests_key, 120)
+            pipe.expire(tokens_key, 120)
+            
+            pipe.execute()
+            
+        except Exception as e:
+            logger.error(f"Failed to update Redis rate limits: {e}")
+            # Fallback to memory
+            self._update_rate_limit_memory(model_name, tokens_used)
+    
+    def _update_rate_limit_memory(self, model_name: str, tokens_used: int):
+        """Update in-memory rate limit counters."""
         current_time = time.time()
         rate_limiter = self.rate_limiters[model_name]
         

@@ -10,9 +10,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
-from ..db.database import get_db
-from ..models.turnitin import WalletEscrow, CheckerPayout, DocLot, PayoutStatus
-from ..blockchain.escrow import USDCEscrowManager, setup_escrow_manager
+from src.db.database import get_db
+from src.db.models import WalletEscrow, CheckerPayout, DocLot, PayoutStatus
+from src.blockchain.escrow import USDCEscrowManager, setup_escrow_manager
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -82,16 +82,16 @@ async def get_payment_quote(
     escrow_manager: USDCEscrowManager = Depends(get_escrow_manager)
 ):
     """Get payment quote for document processing."""
-    
+
     try:
         # Calculate required escrow
         escrow_amount = await escrow_manager.calculate_required_escrow(request.word_count)
-        
+
         # Calculate breakdown
         chunks_needed = (request.word_count + 349) // 350
         pence_per_chunk = 18
         total_cost_usdc = float(Decimal(str(chunks_needed * pence_per_chunk / 100 * 1.25)))
-        
+
         return QuoteResponse(
             word_count=request.word_count,
             estimated_chunks=chunks_needed,
@@ -99,7 +99,7 @@ async def get_payment_quote(
             total_cost_usdc=total_cost_usdc,
             escrow_amount_usdc=float(escrow_amount)
         )
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error calculating quote: {e}")
 
@@ -111,27 +111,27 @@ async def create_escrow(
     escrow_manager: USDCEscrowManager = Depends(get_escrow_manager)
 ):
     """Create escrow for document lot."""
-    
+
     try:
         # Verify lot exists
         lot = db.query(DocLot).filter(DocLot.id == request.lot_id).first()
         if not lot:
             raise HTTPException(status_code=404, detail="Document lot not found")
-        
+
         # Check if escrow already exists
         existing_escrow = db.query(WalletEscrow).filter(
             WalletEscrow.lot_id == request.lot_id
         ).first()
-        
+
         if existing_escrow:
             raise HTTPException(
-                status_code=409, 
+                status_code=409,
                 detail="Escrow already exists for this lot"
             )
-        
+
         # Calculate required amount
         required_amount = await escrow_manager.calculate_required_escrow(lot.word_count)
-        
+
         # Create escrow
         result = await escrow_manager.create_escrow(
             user_wallet=request.user_wallet,
@@ -139,9 +139,9 @@ async def create_escrow(
             amount_usdc=required_amount,
             permit_signature=request.permit_signature
         )
-        
+
         return CreateEscrowResponse(**result)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -154,11 +154,11 @@ async def get_escrow_status(
     escrow_manager: USDCEscrowManager = Depends(get_escrow_manager)
 ):
     """Get escrow status."""
-    
+
     try:
         status = await escrow_manager.get_escrow_status(escrow_id)
         return EscrowStatusResponse(**status)
-        
+
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -172,31 +172,31 @@ async def release_payments(
     escrow_manager: USDCEscrowManager = Depends(get_escrow_manager)
 ):
     """Release payments to checkers for completed lot."""
-    
+
     try:
         # Verify lot exists and is complete
         lot = db.query(DocLot).filter(DocLot.id == lot_id).first()
         if not lot:
             raise HTTPException(status_code=404, detail="Document lot not found")
-        
+
         if lot.status != "completed":
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail="Cannot release payments for incomplete lot"
             )
-        
+
         # Release payments
         results = await escrow_manager.release_payments(lot_id)
-        
+
         # Mark escrow as released
         escrow = db.query(WalletEscrow).filter(
             WalletEscrow.lot_id == lot_id
         ).first()
-        
+
         if escrow and not escrow.released_at:
             escrow.released_at = datetime.now(timezone.utc)
             db.commit()
-        
+
         return {
             "lot_id": lot_id,
             "payments_released": len(results),
@@ -204,7 +204,7 @@ async def release_payments(
             "failed": len([r for r in results if r["status"] == "failed"]),
             "results": results
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -219,26 +219,26 @@ async def get_payouts(
     db: Session = Depends(get_db)
 ):
     """Get payout information."""
-    
+
     try:
         query = db.query(CheckerPayout)
-        
+
         if checker_wallet:
             # Validate wallet format
             if not checker_wallet.startswith('0x') or len(checker_wallet) != 42:
                 raise HTTPException(status_code=400, detail="Invalid wallet address format")
-            
+
             query = query.join(CheckerPayout.checker).filter(
                 CheckerPayout.checker.has(wallet_address=checker_wallet)
             )
-        
+
         if status:
             if status not in ["pending", "paid", "failed"]:
                 raise HTTPException(status_code=400, detail="Invalid status")
             query = query.filter(CheckerPayout.status == PayoutStatus(status))
-        
+
         payouts = query.order_by(CheckerPayout.created_at.desc()).limit(limit).all()
-        
+
         return [
             PayoutInfo(
                 id=payout.id,
@@ -252,7 +252,7 @@ async def get_payouts(
             )
             for payout in payouts
         ]
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -265,26 +265,26 @@ async def process_batch_payouts(
     escrow_manager: USDCEscrowManager = Depends(get_escrow_manager)
 ):
     """Process pending payouts in batch."""
-    
+
     try:
         if max_payouts > 100:
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail="Maximum 100 payouts per batch"
             )
-        
+
         results = await escrow_manager.batch_process_payouts(max_payouts)
-        
+
         successful = len([r for r in results if r["status"] == "success"])
         failed = len([r for r in results if r["status"] == "failed"])
-        
+
         return PayoutBatchResponse(
             processed=len(results),
             successful=successful,
             failed=failed,
             results=results
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -297,22 +297,22 @@ async def get_wallet_balances(
     escrow_manager: USDCEscrowManager = Depends(get_escrow_manager)
 ):
     """Get USDC balance for wallet address."""
-    
+
     try:
         # Validate wallet format
         if not wallet_address.startswith('0x') or len(wallet_address) != 42:
             raise HTTPException(status_code=400, detail="Invalid wallet address format")
-        
+
         # Get USDC balance
         balance_wei = await escrow_manager._get_usdc_balance(wallet_address)
         balance_usdc = balance_wei / 10**6  # USDC has 6 decimals
-        
+
         return {
             "wallet_address": wallet_address,
             "usdc_balance": balance_usdc,
             "balance_wei": balance_wei
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -324,39 +324,39 @@ async def get_payment_stats(
     db: Session = Depends(get_db)
 ):
     """Get payment system statistics."""
-    
+
     try:
         # Total escrows
         total_escrows = db.query(WalletEscrow).count()
-        
+
         # Total value locked
         total_locked = db.query(
             db.func.sum(WalletEscrow.amount_usdc)
         ).filter(
             WalletEscrow.released_at.is_(None)
         ).scalar() or 0
-        
+
         # Total payouts by status
         payout_stats = db.query(
             CheckerPayout.status,
             db.func.count(CheckerPayout.id),
             db.func.sum(CheckerPayout.amount_usdc)
         ).group_by(CheckerPayout.status).all()
-        
+
         payout_breakdown = {}
         for status, count, total in payout_stats:
             payout_breakdown[status.value] = {
                 "count": count,
                 "total_usdc": float(total or 0)
             }
-        
+
         return {
             "total_escrows": total_escrows,
             "total_value_locked_usdc": float(total_locked),
             "payout_breakdown": payout_breakdown,
             "last_updated": datetime.now(timezone.utc).isoformat()
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting payment stats: {e}")
 
@@ -364,12 +364,12 @@ async def get_payment_stats(
 @router.post("/admin/emergency-stop")
 async def emergency_stop_payments():
     """Emergency stop for payment processing (admin only)."""
-    
+
     # In production, this would:
     # 1. Check admin authentication
     # 2. Pause all payment processing
     # 3. Send alerts to administrators
-    
+
     return {
         "status": "emergency_stop_activated",
         "message": "All payment processing has been halted",
@@ -380,12 +380,12 @@ async def emergency_stop_payments():
 @router.post("/admin/resume-payments")
 async def resume_payments():
     """Resume payment processing (admin only)."""
-    
+
     # In production, this would:
     # 1. Check admin authentication
     # 2. Resume payment processing
     # 3. Send alerts to administrators
-    
+
     return {
         "status": "payments_resumed",
         "message": "Payment processing has been resumed",

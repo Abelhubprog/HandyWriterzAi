@@ -16,6 +16,12 @@ from langchain_core.messages import HumanMessage
 import redis.asyncio as redis
 import os
 
+# Import typed SSE events for production-grade event streaming
+from src.schemas.sse_events import (
+    SSEEventFactory, SSEEventType, ContentEvent, RoutingEvent,
+    DoneEvent, ErrorEvent, CostEvent, MetricsEvent
+)
+
 # Feature-gated SSE publisher and params normalization (Do-Not-Harm)
 try:
     from src.agent.sse import SSEPublisher  # type: ignore
@@ -67,7 +73,29 @@ except Exception:  # pragma: no cover
             def __exit__(self, *args): pass
         return _DummyContext()
 
-# Typed event envelope (single definition)
+# Prompt Orchestrator imports
+try:
+    from src.services.prompt_orchestrator import (
+        get_prompt_orchestrator, UserParams as PromptUserParams,
+        EvidenceSnippet, CostLevel as PromptCostLevel, UseCase
+    )  # type: ignore
+    _FEATURE_PROMPT_ORCHESTRATOR = os.getenv("FEATURE_PROMPT_ORCHESTRATOR", "true").lower() == "true"
+except Exception:  # pragma: no cover
+    def get_prompt_orchestrator():  # type: ignore
+        return None
+    class PromptUserParams:  # type: ignore
+        pass
+    class EvidenceSnippet:  # type: ignore
+        pass
+    class PromptCostLevel:  # type: ignore
+        BUDGET = "budget"
+        STANDARD = "standard"
+        PREMIUM = "premium"
+    class UseCase:  # type: ignore
+        GENERAL = "general"
+    _FEATURE_PROMPT_ORCHESTRATOR = False
+
+# Legacy event data - being replaced by typed SSE events
 class _EventData(TypedDict, total=False):
     type: str
     message: str
@@ -194,6 +222,13 @@ class UnifiedProcessor:
                 timestamp=time.time()
             ), use_sse=use_sse, double_publish=double_publish)
 
+            # Per-step streaming: Planning started (high-level plan before graph)
+            await self._publish_event(conversation_id, _EventData(
+                type="planning_started",
+                message="Planning the approach...",
+                timestamp=time.time()
+            ), use_sse=use_sse, double_publish=double_publish)
+
             # Optional params normalization prior to routing
             effective_params = user_params or {}
             if use_params:
@@ -214,18 +249,24 @@ class UnifiedProcessor:
                 reason=str(routing.get("reason", ""))
             ), use_sse=use_sse, double_publish=double_publish)
 
-            if routing.get("system") == "simple":
-                result = await self._process_simple(message, files or [], conversation_id)
-            elif routing.get("system") == "advanced":
-                result = await self._process_advanced(message, files or [], effective_params if use_params else (user_params or {}), user_id or "", conversation_id)
-            else:  # hybrid
-                result = await self._process_hybrid(message, files or [], effective_params if use_params else (user_params or {}), user_id or "", conversation_id)
+            # Always use advanced system - simple and hybrid systems removed
+            # Emit verify/writer/evaluator/formatter lifecycle around the advanced execution window.
+            await self._publish_event(conversation_id, _EventData(
+                type="search_started",
+                message="Starting multi-agent search...",
+                timestamp=time.time()
+            ), use_sse=use_sse, double_publish=double_publish)
+
+            # Advanced execution (search/verify/write/evaluate/format handled inside graph; writer will stream tokens)
+            result = await self._process_advanced(message, files or [], effective_params if use_params else (user_params or {}), user_id or "", conversation_id)
+
+            # Finalize with finished event emitted below (done)
 
             # Add routing metadata
             result.update({
-                "system_used": routing["system"],
+                "system_used": "advanced",  # Always advanced now
                 "complexity_score": routing["complexity"],
-                "routing_reason": routing["reason"],
+                "routing_reason": "Simple system removed - using advanced",
                 "routing_confidence": routing["confidence"],
                 "processing_time": time.time() - start_time
             })
@@ -249,6 +290,13 @@ class UnifiedProcessor:
                 logger.warning(f"Failed to record usage: {usage_error}")
 
             # Final completion event
+            await self._publish_event(conversation_id, _EventData(
+                type="workflow_finished",
+                message="Processing completed",
+                timestamp=time.time()
+            ), use_sse=use_sse, double_publish=double_publish)
+
+            # Back-compat 'done'
             await self._publish_event(conversation_id, _EventData(
                 type="done",
                 message="Processing completed",
@@ -301,77 +349,81 @@ class UnifiedProcessor:
             }
 
     async def _publish_event(self, conversation_id: str, event_data: _EventData, use_sse: bool = False, double_publish: bool = False):
-        """Publish streaming event to Redis channel and optionally via unified SSEPublisher."""
+        """Legacy event publishing - use _publish_typed_event for new code."""
+        # Convert legacy event to typed event
         try:
-            channel = f"sse:{conversation_id}"
-            # Legacy path publish (stringified JSON)
-            await redis_client.publish(channel, json.dumps(event_data))
+            event_type = SSEEventType(event_data.get("type", "content"))
+            typed_event = SSEEventFactory.create_event(
+                event_type,
+                conversation_id=conversation_id,
+                **{k: v for k, v in event_data.items() if k != "type"}
+            )
+            await self._publish_typed_event(typed_event, use_sse, double_publish)
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Failed to convert to typed event, using legacy: {e}")
+            await self._publish_legacy_event(conversation_id, event_data, use_sse, double_publish)
 
-            # Unified publisher path (JSON envelope)
-            if use_sse and _sse_pub is not None and SSEPublisher is not None:
+    async def _publish_typed_event(self, event: Any, use_sse: bool = False, double_publish: bool = False):
+        """Publish typed SSE event with production-grade serialization."""
+        try:
+            conversation_id = event.conversation_id
+
+            # Primary path: Unified SSE Publisher (production)
+            if _sse_pub is not None and SSEPublisher is not None:
                 try:
-                    # Ensure awaited call to unified publisher for reliability and ordering
+                    # Serialize typed event
+                    event_data = event.dict()
+                    await _sse_pub.publish(
+                        conversation_id,
+                        event.type,
+                        {k: v for k, v in event_data.items() if k not in ["type", "conversation_id"]}
+                    )
+
+                    # Legacy fallback only if double_publish enabled for transition
+                    if double_publish:
+                        channel = f"sse:{conversation_id}"
+                        await redis_client.publish(channel, event.json())
+                    return
+                except Exception as pub_err:
+                    logger.error(f"SSE unified publish failed, falling back to Redis: {pub_err}")
+
+            # Fallback path: Direct Redis (legacy/emergency)
+            channel = f"sse:{conversation_id}"
+            await redis_client.publish(channel, event.json())
+
+        except Exception as e:
+            logger.error(f"All typed event publishing failed: {e}")
+            raise
+
+    async def _publish_legacy_event(self, conversation_id: str, event_data: _EventData, use_sse: bool = False, double_publish: bool = False):
+        """Legacy event publishing fallback."""
+        try:
+            # Primary path: Unified SSE Publisher (production)
+            if _sse_pub is not None and SSEPublisher is not None:
+                try:
                     await _sse_pub.publish(
                         conversation_id,
                         event_data.get("type", "content"),
                         {k: v for k, v in event_data.items() if k != "type"}
                     )
+
+                    # Legacy fallback only if double_publish enabled for transition
+                    if double_publish:
+                        channel = f"sse:{conversation_id}"
+                        await redis_client.publish(channel, json.dumps(event_data))
+                    return
                 except Exception as pub_err:
-                    logger.warning(f"SSE unified publish failed (shadow mode may continue): {pub_err}")
+                    logger.error(f"SSE unified publish failed, falling back to Redis: {pub_err}")
 
-            # Optional: when double_publish is True, legacy + unified already covered above
-        except Exception as e:
-            logger.error(f"Failed to publish event: {e}")
-
-    async def _process_simple(self, message: str, files: List[Dict[str, Any]], conversation_id: str) -> Dict[str, Any]:
-        """Process using simple Gemini system."""
-        if not self.router.simple_available:
-            raise Exception("Simple system not available")
-
-        await self._publish_event(conversation_id, _EventData(
-            type="content",
-            message="Thinking with Gemini...",
-            timestamp=time.time()
-        ))
-
-        try:
-            # Import here to avoid circular imports
-            from ..simple import gemini_graph, GeminiState  # type: ignore
-
-            if gemini_graph is None or GeminiState is None:
-                raise Exception("Simple system components not available")
-
-            # Create simple state
-            state = GeminiState(
-                messages=[HumanMessage(content=message)],
-                search_query=[message],
-                max_research_loops=2
-            )
-
-            config = {"configurable": {"thread_id": f"simple_session_{uuid.uuid4()}"}}
-            result = await gemini_graph.ainvoke(state, config)
-
-            # Extract response
-            final_message = result["messages"][-1] if result.get("messages") else None
-            response_content = final_message.content if final_message else "No response generated"
-
-            # Generate trace_id for simple system
-            trace_id = str(uuid.uuid4())
-
-            return {
-                "success": True,
-                "trace_id": trace_id,
-                "conversation_id": trace_id,  # Use same ID for consistency
-                "response": response_content,
-                "sources": result.get("sources_gathered", []),
-                "workflow_status": "completed",
-                "research_loops": result.get("research_loop_count", 0),
-                "system_type": "simple_gemini"
-            }
+            # Fallback path: Direct Redis (legacy/emergency)
+            channel = f"sse:{conversation_id}"
+            await redis_client.publish(channel, json.dumps(event_data))
 
         except Exception as e:
-            logger.error(f"Simple processing error: {e}")
-            raise Exception(f"Simple system processing failed: {e}")
+            logger.error(f"All legacy event publishing failed: {e}")
+            raise
+
+    # _process_simple method removed - simple system eliminated
 
     async def _process_advanced(
         self,
@@ -381,7 +433,7 @@ class UnifiedProcessor:
         user_id: str = None,
         conversation_id: str = None
     ) -> Dict[str, Any]:
-        """Process using advanced HandyWriterz system."""
+        """Process using advanced HandyWriterz system with prompt orchestration."""
 
         await self._publish_event(conversation_id, {
             "type": "content",
@@ -400,7 +452,63 @@ class UnifiedProcessor:
                 # Smart defaults based on message analysis
                 validated_params = self._infer_user_params(message)
 
-            # Create advanced state
+            # Initialize prompt orchestration if enabled
+            prompt_assembly_result = None
+            if _FEATURE_PROMPT_ORCHESTRATOR:
+                try:
+                    orchestrator = get_prompt_orchestrator()
+                    if orchestrator:
+                        # Map user params to prompt orchestrator format
+                        use_case = self._map_mode_to_use_case(user_params.get("mode", "general") if user_params else "general")
+
+                        prompt_user_params = PromptUserParams(
+                            citation_style=getattr(validated_params, 'citation_style', 'apa'),
+                            word_count_target=getattr(validated_params, 'word_count', None),
+                            academic_level=getattr(validated_params, 'academic_level', 'graduate'),
+                            file_ids=[f.get('file_id', '') for f in files if f.get('file_id')]
+                        )
+
+                        # TODO: Integrate with memory service when available
+                        memory_summary = None
+                        evidence_snippets = []
+
+                        # Map cost level
+                        budget_level = self._map_cost_level(user_params.get("budget_level", "standard") if user_params else "standard")
+
+                        await self._publish_event(conversation_id, {
+                            "type": "content",
+                            "text": f"🎯 Assembling {use_case} prompt with {len(files)} files..."
+                        })
+
+                        # Assemble production-grade prompt
+                        prompt_assembly_result = orchestrator.assemble_prompt(
+                            use_case=use_case,
+                            user_params=prompt_user_params,
+                            memory_summary=memory_summary,
+                            evidence_snippets=evidence_snippets,
+                            budget_level=budget_level,
+                            custom_context={
+                                "user_prompt": message,
+                                "files_count": len(files),
+                                "file_types": list(set(f.get('type', 'unknown') for f in files))
+                            }
+                        )
+
+                        logger.info(f"🎯 Prompt assembled: {prompt_assembly_result.prompt_id} for {use_case}")
+
+                        await self._publish_event(conversation_id, {
+                            "type": "content",
+                            "text": f"✅ Prompt orchestration complete (ID: {prompt_assembly_result.prompt_id[:8]}...)"
+                        })
+
+                except Exception as e:
+                    logger.warning(f"⚠️ Prompt orchestration failed, using default: {e}")
+                    await self._publish_event(conversation_id, {
+                        "type": "content",
+                        "text": "⚠️ Using fallback prompt system..."
+                    })
+
+            # Create advanced state with prompt orchestration
             # Construct via kwargs dictionary to avoid Pylance false negatives on dataclass analysis
             _state_kwargs = {
                 "conversation_id": conversation_id,
@@ -437,11 +545,24 @@ class UnifiedProcessor:
                 "auth_token": None,
                 "payment_transaction_id": None,
                 "uploaded_files": [{"content": f.get("content", ""), "filename": f.get("filename", "")} for f in files],
+                # Add prompt orchestration metadata
+                "prompt_metadata": {
+                    "prompt_id": prompt_assembly_result.prompt_id if prompt_assembly_result else None,
+                    "policy_version": prompt_assembly_result.policy_version if prompt_assembly_result else None,
+                    "use_case": prompt_assembly_result.metadata.get("use_case") if prompt_assembly_result else "general",
+                    "model_hints": prompt_assembly_result.model_hints.dict() if prompt_assembly_result else {},
+                    "output_contract": prompt_assembly_result.output_contract.dict() if prompt_assembly_result else {},
+                    "token_estimate": prompt_assembly_result.token_estimate if prompt_assembly_result else 0
+                } if _FEATURE_PROMPT_ORCHESTRATOR else {}
             }
             state = HandyWriterzState(**_state_kwargs)  # type: ignore[arg-type]
 
-            # Execute the workflow
-            config = {"configurable": {"thread_id": conversation_id}}
+            # Execute the workflow with enhanced configuration
+            config = {
+                "configurable": {"thread_id": conversation_id},
+                # Pass prompt assembly to graph execution
+                "prompt_assembly": prompt_assembly_result if prompt_assembly_result else None
+            }
             result = await handywriterz_graph.ainvoke(state, config)
 
             # Extract comprehensive results
@@ -463,101 +584,7 @@ class UnifiedProcessor:
             logger.error(f"Advanced processing error: {e}")
             raise Exception(f"Advanced system processing failed: {e}")
 
-    async def _process_hybrid(
-        self,
-        message: str,
-        files: List,
-        user_params: dict = None,
-        user_id: str = None,
-        conversation_id: str = None
-    ) -> Dict[str, Any]:
-        """Process using hybrid approach (both systems in parallel)."""
-
-        await self._publish_event(conversation_id, {
-            "type": "content",
-            "text": "Running hybrid analysis with multiple AI systems..."
-        })
-
-        try:
-            tasks = []
-
-            # Start simple system for quick insights
-            if self.router.simple_available:
-                tasks.append(self._process_simple(message, files, conversation_id))
-
-            # Start advanced system for comprehensive analysis
-            if self.router.advanced_available:
-                tasks.append(self._process_advanced(message, files, user_params, user_id, conversation_id))
-
-            # Wait for both to complete
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            # Process results
-            simple_result = None
-            advanced_result = None
-
-            if len(results) == 2:
-                simple_result, advanced_result = results
-            elif len(results) == 1:
-                # Only one system was available
-                if self.router.advanced_available:
-                    advanced_result = results[0]
-                else:
-                    simple_result = results[0]
-
-            # Handle exceptions
-            if isinstance(advanced_result, Exception):
-                if isinstance(simple_result, Exception) or simple_result is None:
-                    raise advanced_result
-                else:
-                    # Use simple result as fallback
-                    simple_result["system_type"] = "simple_fallback"
-                    return simple_result
-
-            # If only simple system ran
-            if advanced_result is None:
-                if isinstance(simple_result, Exception):
-                    raise simple_result
-                return simple_result
-
-            # Combine results intelligently
-            combined_sources = []
-            if simple_result and not isinstance(simple_result, Exception):
-                combined_sources.extend(simple_result.get("sources", []))
-            if advanced_result and not isinstance(advanced_result, Exception):
-                combined_sources.extend(advanced_result.get("sources", []))
-
-            # Deduplicate sources
-            unique_sources = []
-            seen_urls = set()
-            for source in combined_sources:
-                url = source.get("url", "")
-                if url and url not in seen_urls:
-                    unique_sources.append(source)
-                    seen_urls.add(url)
-                elif not url:  # No URL, include anyway
-                    unique_sources.append(source)
-
-            return {
-                "success": True,
-                "response": advanced_result.get("response", ""),
-                "conversation_id": advanced_result.get("conversation_id"),
-                "sources": unique_sources,
-                "workflow_status": "completed",
-                "quality_score": advanced_result.get("quality_score", 0),
-                "simple_insights": simple_result.get("response", "") if simple_result and not isinstance(simple_result, Exception) else None,
-                "advanced_analysis": advanced_result.get("response", ""),
-                "research_depth": len(unique_sources),
-                "system_type": "hybrid",
-                "hybrid_results": {
-                    "simple_available": simple_result is not None and not isinstance(simple_result, Exception),
-                    "advanced_available": not isinstance(advanced_result, Exception)
-                }
-            }
-
-        except Exception as e:
-            logger.error(f"Hybrid processing error: {e}")
-            raise Exception(f"Hybrid processing failed: {e}")
+    # _process_hybrid method removed - hybrid system eliminated
 
     def _extract_content(self, result) -> str:
         """Extract final content from HandyWriterz result."""
@@ -581,7 +608,16 @@ class UnifiedProcessor:
                 if hasattr(msg, 'content') and not isinstance(msg, HumanMessage):
                     return msg.content
 
-        return "Advanced content generated successfully"
+        # No content found - return structured error for debugging
+        error_details = {
+            "error": "No content generated",
+            "checked_sources": content_sources,
+            "available_attributes": [attr for attr in dir(result) if not attr.startswith('_')],
+            "messages_count": len(getattr(result, 'messages', [])),
+            "workflow_status": getattr(result, 'workflow_status', 'unknown')
+        }
+        logger.error(f"Content extraction failed: {error_details}")
+        return f"Content generation incomplete. Agent workflow may have failed. Check logs for details."
 
     def _infer_user_params(self, message: str) -> UserParams:
         """Infer user parameters from message content."""
@@ -633,3 +669,42 @@ class UnifiedProcessor:
             referenceStyle="APA",
             educationLevel="undergraduate"
         )
+
+    def _map_mode_to_use_case(self, mode: str) -> str:
+        """Map frontend mode to prompt orchestrator use case."""
+        if not _FEATURE_PROMPT_ORCHESTRATOR:
+            return "general"
+
+        mode_mapping = {
+            "general": UseCase.GENERAL,
+            "dissertation": UseCase.DISSERTATION,
+            "thesis": UseCase.THESIS,
+            "research_paper": UseCase.RESEARCH_PAPER,
+            "review_article": UseCase.REVIEW_ARTICLE,
+            "case_study": UseCase.CASE_STUDY,
+            "methodology_writer": UseCase.METHODOLOGY_WRITER,
+            "literature_review": UseCase.LITERATURE_REVIEW,
+            "slide_generator": UseCase.SLIDE_GENERATOR,
+            "coding_helper": UseCase.CODING_HELPER,
+            # Legacy mode mappings
+            "qa_general": UseCase.GENERAL,
+            "academic_writing": UseCase.DISSERTATION,
+            "research": UseCase.RESEARCH_PAPER
+        }
+        return mode_mapping.get(mode.lower(), UseCase.GENERAL)
+
+    def _map_cost_level(self, cost_level: str) -> "PromptCostLevel":
+        """Map cost level to prompt orchestrator format."""
+        if not _FEATURE_PROMPT_ORCHESTRATOR:
+            return PromptCostLevel.STANDARD
+
+        level_mapping = {
+            "low": PromptCostLevel.BUDGET,
+            "budget": PromptCostLevel.BUDGET,
+            "medium": PromptCostLevel.STANDARD,
+            "standard": PromptCostLevel.STANDARD,
+            "high": PromptCostLevel.PREMIUM,
+            "premium": PromptCostLevel.PREMIUM
+        }
+        mapped_level = level_mapping.get(cost_level.lower(), PromptCostLevel.STANDARD)
+        return mapped_level

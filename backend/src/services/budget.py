@@ -45,7 +45,11 @@ class BudgetGuard:
     Budget enforcement system that tracks costs and prevents overspending.
     """
     
-    def __init__(self):
+    def __init__(self, model_registry=None, strict_mode: bool = True, redis_client=None):
+        self.model_registry = model_registry
+        self.strict_mode = strict_mode  # Fail closed on missing pricing in production
+        self.redis_client = redis_client
+        
         # Default budget limits (can be overridden per user/tenant)
         self.default_limits = {
             "daily_budget": 50.0,        # $50 per day
@@ -62,14 +66,22 @@ class BudgetGuard:
             CostLevel.PREMIUM: 10.0,
         }
         
-        # Token cost estimates (USD per 1K tokens)
-        self.token_costs = {
+        # Fallback token cost estimates (USD per 1K tokens) - used only when registry unavailable
+        self.fallback_token_costs = {
             "input_base": 0.01,
             "output_base": 0.02,
             "processing_overhead": 0.005,
         }
         
-        # Usage tracking (in-memory for now, should be Redis/DB in production)
+        # Redis key prefixes for different time windows
+        self.redis_keys = {
+            "daily": "budget:daily:",
+            "hourly": "budget:hourly:", 
+            "monthly": "budget:monthly:",
+            "total": "budget:total:"
+        }
+        
+        # Fallback to in-memory if Redis unavailable (for development)
         self._usage_tracker: Dict[str, Dict[str, Any]] = {}
     
     def guard(
@@ -167,14 +179,26 @@ class BudgetGuard:
             
         except Exception as e:
             logger.error(f"Budget guard error: {e}")
-            # Fail open with warning
-            return BudgetResult(
-                allowed=True,
-                reason=f"Budget check failed: {e}",
-                estimated_cost=0.0,
-                remaining_budget=0.0,
-                code="BUDGET_CHECK_FAILED"
-            )
+            
+            # Production: fail closed on critical errors, fail open on non-critical
+            if self.strict_mode and (isinstance(e, ValueError) or "pricing" in str(e).lower()):
+                return BudgetResult(
+                    allowed=False,
+                    reason=f"Budget enforcement failed - pricing required: {e}",
+                    estimated_cost=0.0,
+                    remaining_budget=0.0,
+                    code="BUDGET_ENFORCEMENT_ERROR"
+                )
+            else:
+                # Fail open for infrastructure errors (Redis down, etc.)
+                logger.warning(f"Budget guard failing open due to infrastructure error: {e}")
+                return BudgetResult(
+                    allowed=True,
+                    reason=f"Budget check failed (fail-open): {e}",
+                    estimated_cost=0.0,
+                    remaining_budget=0.0,
+                    code="BUDGET_CHECK_FAILED"
+                )
     
     def record_usage(
         self,
@@ -184,7 +208,7 @@ class BudgetGuard:
         model: Optional[str] = None
     ) -> None:
         """
-        Record actual usage after request completion.
+        Record actual usage using Redis for multi-instance deployment.
         
         Args:
             actual_cost: Actual cost incurred
@@ -196,38 +220,84 @@ class BudgetGuard:
             tenant_key = tenant or "default"
             current_time = time.time()
             
-            if tenant_key not in self._usage_tracker:
-                self._usage_tracker[tenant_key] = {
-                    "daily_spent": 0.0,
-                    "hourly_spent": 0.0,
-                    "monthly_spent": 0.0,
-                    "daily_reset": current_time,
-                    "hourly_reset": current_time,
-                    "monthly_reset": current_time,
-                    "total_requests": 0,
-                    "total_tokens": 0,
-                }
-            
-            usage = self._usage_tracker[tenant_key]
-            
-            # Reset counters if time periods have elapsed
-            self._reset_expired_counters(usage, current_time)
-            
-            # Update usage
-            usage["daily_spent"] += actual_cost
-            usage["hourly_spent"] += actual_cost
-            usage["monthly_spent"] += actual_cost
-            usage["total_requests"] += 1
-            usage["total_tokens"] += tokens_used
-            
-            logger.debug(f"Recorded usage for {tenant_key}: ${actual_cost:.4f}, {tokens_used} tokens")
+            if self.redis_client:
+                self._record_usage_redis(tenant_key, actual_cost, tokens_used, current_time, model)
+            else:
+                # Fallback to in-memory for development
+                self._record_usage_memory(tenant_key, actual_cost, tokens_used, current_time)
+                
+            logger.debug(f"Recorded usage for {tenant_key}: ${actual_cost:.4f}, {tokens_used} tokens (model: {model})")
             
         except Exception as e:
             logger.error(f"Failed to record usage: {e}")
     
+    def _record_usage_redis(self, tenant_key: str, cost: float, tokens: int, timestamp: float, model: Optional[str]):
+        """Record usage in Redis with atomic operations."""
+        import datetime
+        
+        # Generate time-based keys
+        dt = datetime.datetime.fromtimestamp(timestamp)
+        daily_key = f"{self.redis_keys['daily']}{tenant_key}:{dt.strftime('%Y-%m-%d')}"
+        hourly_key = f"{self.redis_keys['hourly']}{tenant_key}:{dt.strftime('%Y-%m-%d-%H')}"
+        monthly_key = f"{self.redis_keys['monthly']}{tenant_key}:{dt.strftime('%Y-%m')}"
+        total_key = f"{self.redis_keys['total']}{tenant_key}"
+        
+        # Use Redis pipeline for atomic updates
+        pipe = self.redis_client.pipeline()
+        
+        # Increment cost counters
+        pipe.incrbyfloat(daily_key, cost)
+        pipe.incrbyfloat(hourly_key, cost)  
+        pipe.incrbyfloat(monthly_key, cost)
+        pipe.incrbyfloat(f"{total_key}:cost", cost)
+        
+        # Increment token counters
+        pipe.incr(f"{total_key}:tokens", tokens)
+        pipe.incr(f"{total_key}:requests", 1)
+        
+        # Set expiration times
+        pipe.expire(daily_key, 86400 * 7)  # Keep daily data for 7 days
+        pipe.expire(hourly_key, 3600 * 48)  # Keep hourly data for 48 hours
+        pipe.expire(monthly_key, 86400 * 90)  # Keep monthly data for 90 days
+        
+        # Track model usage
+        if model:
+            model_key = f"{total_key}:models:{model}"
+            pipe.incrbyfloat(model_key, cost)
+            pipe.incr(f"{model_key}:requests", 1)
+            pipe.expire(model_key, 86400 * 30)  # Keep model stats for 30 days
+        
+        pipe.execute()
+    
+    def _record_usage_memory(self, tenant_key: str, cost: float, tokens: int, timestamp: float):
+        """Fallback in-memory usage tracking."""
+        if tenant_key not in self._usage_tracker:
+            self._usage_tracker[tenant_key] = {
+                "daily_spent": 0.0,
+                "hourly_spent": 0.0,
+                "monthly_spent": 0.0,
+                "daily_reset": timestamp,
+                "hourly_reset": timestamp,
+                "monthly_reset": timestamp,
+                "total_requests": 0,
+                "total_tokens": 0,
+            }
+        
+        usage = self._usage_tracker[tenant_key]
+        
+        # Reset counters if time periods have elapsed
+        self._reset_expired_counters(usage, timestamp)
+        
+        # Update usage
+        usage["daily_spent"] += cost
+        usage["hourly_spent"] += cost
+        usage["monthly_spent"] += cost
+        usage["total_requests"] += 1
+        usage["total_tokens"] += tokens
+    
     def get_usage_summary(self, tenant: Optional[str] = None) -> Dict[str, Any]:
         """
-        Get usage summary for a tenant.
+        Get usage summary for a tenant from Redis or fallback to memory.
         
         Args:
             tenant: Tenant/user identifier
@@ -237,6 +307,53 @@ class BudgetGuard:
         """
         tenant_key = tenant or "default"
         
+        if self.redis_client:
+            return self._get_usage_summary_redis(tenant_key)
+        else:
+            return self._get_usage_summary_memory(tenant_key)
+    
+    def _get_usage_summary_redis(self, tenant_key: str) -> Dict[str, Any]:
+        """Get usage summary from Redis."""
+        import datetime
+        
+        current_time = time.time()
+        dt = datetime.datetime.fromtimestamp(current_time)
+        
+        # Generate current time-based keys
+        daily_key = f"{self.redis_keys['daily']}{tenant_key}:{dt.strftime('%Y-%m-%d')}"
+        hourly_key = f"{self.redis_keys['hourly']}{tenant_key}:{dt.strftime('%Y-%m-%d-%H')}"
+        monthly_key = f"{self.redis_keys['monthly']}{tenant_key}:{dt.strftime('%Y-%m')}"
+        total_key = f"{self.redis_keys['total']}{tenant_key}"
+        
+        try:
+            # Get all usage data in one pipeline call
+            pipe = self.redis_client.pipeline()
+            pipe.get(daily_key)
+            pipe.get(hourly_key)
+            pipe.get(monthly_key)
+            pipe.get(f"{total_key}:cost")
+            pipe.get(f"{total_key}:tokens")
+            pipe.get(f"{total_key}:requests")
+            
+            results = pipe.execute()
+            
+            return {
+                "daily_spent": float(results[0] or 0.0),
+                "hourly_spent": float(results[1] or 0.0),
+                "monthly_spent": float(results[2] or 0.0),
+                "total_cost": float(results[3] or 0.0),
+                "total_tokens": int(results[4] or 0),
+                "total_requests": int(results[5] or 0),
+                "limits": self.default_limits.copy(),
+                "data_source": "redis"
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to get usage from Redis: {e}")
+            return self._get_usage_summary_memory(tenant_key)
+    
+    def _get_usage_summary_memory(self, tenant_key: str) -> Dict[str, Any]:
+        """Get usage summary from in-memory fallback."""
         if tenant_key not in self._usage_tracker:
             return {
                 "daily_spent": 0.0,
@@ -244,11 +361,13 @@ class BudgetGuard:
                 "monthly_spent": 0.0,
                 "total_requests": 0,
                 "total_tokens": 0,
-                "limits": self.default_limits.copy()
+                "limits": self.default_limits.copy(),
+                "data_source": "memory"
             }
         
         usage = self._usage_tracker[tenant_key].copy()
         usage["limits"] = self.default_limits.copy()
+        usage["data_source"] = "memory"
         
         # Reset expired counters for accurate reporting
         current_time = time.time()
@@ -301,21 +420,45 @@ class BudgetGuard:
         self,
         tokens: int,
         model: Optional[str] = None,
-        cost_level: CostLevel = CostLevel.MEDIUM
+        cost_level: CostLevel = CostLevel.MEDIUM,
+        provider: Optional[str] = None
     ) -> float:
-        """Estimate cost for token usage."""
+        """Estimate cost for token usage using registry pricing when available."""
         
-        # Base cost calculation
+        # Try to get pricing from model registry first
+        if self.model_registry and model:
+            try:
+                model_info = self.model_registry.resolve(model)
+                if model_info and model_info.pricing:
+                    # Use registry pricing (input + output estimate)
+                    input_tokens = int(tokens * 0.7)  # Assume 70% input, 30% output
+                    output_tokens = tokens - input_tokens
+                    
+                    cost = (
+                        (input_tokens / 1000) * model_info.pricing.input_cost +
+                        (output_tokens / 1000) * model_info.pricing.output_cost
+                    )
+                    
+                    # Apply cost level multiplier
+                    multiplier = self.cost_multipliers[cost_level]
+                    return cost * multiplier
+                    
+            except Exception as e:
+                logger.warning(f"Registry pricing lookup failed for {model}: {e}")
+                if self.strict_mode:
+                    raise ValueError(f"Model pricing required in strict mode: {model}")
+        
+        # Fallback to hardcoded estimates
         base_cost = (tokens / 1000) * (
-            self.token_costs["input_base"] + 
-            self.token_costs["output_base"] + 
-            self.token_costs["processing_overhead"]
+            self.fallback_token_costs["input_base"] + 
+            self.fallback_token_costs["output_base"] + 
+            self.fallback_token_costs["processing_overhead"]
         )
         
         # Apply cost level multiplier
         multiplier = self.cost_multipliers[cost_level]
         
-        # Model-specific adjustments (premium models cost more)
+        # Model-specific adjustments (premium models cost more) - fallback heuristics
         model_multiplier = 1.0
         if model:
             model_lower = model.lower()
@@ -326,7 +469,12 @@ class BudgetGuard:
             elif "premium" in model_lower or "advanced" in model_lower:
                 model_multiplier = 3.0
         
-        return base_cost * multiplier * model_multiplier
+        final_cost = base_cost * multiplier * model_multiplier
+        
+        if self.strict_mode and not self.model_registry:
+            logger.warning(f"Using fallback pricing for {model}: ${final_cost:.4f}")
+            
+        return final_cost
     
     def _get_limits(self, role: str, user_limits: Optional[Dict[str, float]] = None) -> Dict[str, float]:
         """Get budget limits for role and user."""
@@ -385,11 +533,37 @@ class BudgetGuard:
 _budget_guard: Optional[BudgetGuard] = None
 
 
-def get_budget_guard() -> BudgetGuard:
-    """Get global budget guard instance."""
+def get_budget_guard(model_registry=None, strict_mode: bool = True, redis_client=None) -> BudgetGuard:
+    """Get global budget guard instance with registry integration and Redis backing."""
     global _budget_guard
     if _budget_guard is None:
-        _budget_guard = BudgetGuard()
+        # Try to get registry if not provided
+        if model_registry is None:
+            try:
+                from src.models.registry import get_registry
+                model_registry = get_registry()
+            except ImportError:
+                logger.warning("ModelRegistry not available - using fallback pricing")
+        
+        # Try to get Redis client if not provided
+        if redis_client is None:
+            try:
+                import redis
+                import os
+                redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+                redis_client = redis.from_url(redis_url, decode_responses=True)
+                # Test connection
+                redis_client.ping()
+                logger.info("✅ BudgetGuard using Redis for usage tracking")
+            except Exception as e:
+                logger.warning(f"Redis unavailable for BudgetGuard, using in-memory fallback: {e}")
+                redis_client = None
+        
+        _budget_guard = BudgetGuard(
+            model_registry=model_registry, 
+            strict_mode=strict_mode,
+            redis_client=redis_client
+        )
     return _budget_guard
 
 

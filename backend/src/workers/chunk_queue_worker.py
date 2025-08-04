@@ -2,9 +2,9 @@ import os
 import json
 import asyncio
 from celery import Celery
-from gateways.telegram_gateway import send_doc_and_get_reports
+from src.gateways.telegram_gateway import send_doc_and_get_reports
 # Assuming you have a storage utility, e.g., for S3
-# from utils.storage import upload_file
+# from src.utils.storage import upload_file
 
 # Configure Celery
 # It's recommended to use a config file for these settings
@@ -35,17 +35,22 @@ def process_chunk_for_turnitin(message: str):
     try:
         data = json.loads(message)
         chunk_id = data['chunk_id']
-        s3_key = data['s3_key'] # The path to the chunk file in S3 or local storage
+        s3_key = data['s3_key']  # The path to the chunk file in S3 or local storage
 
         print(f"Processing chunk_id: {chunk_id} from {s3_key}")
 
         # 1. Download the file from storage (if necessary).
         # For this example, we'll assume the file is accessible at `s3_key` path.
-        local_path = s3_key # In reality, you'd download this file first.
+        local_path = s3_key  # In reality, you'd download this file first.
 
         # 2. Run the Turnitin process via the Telegram gateway
         try:
-            sim_pdf_bytes, ai_pdf_bytes = asyncio.run(send_doc_and_get_reports(local_path))
+            # If already inside an event loop, use create_task pattern; otherwise run directly
+            try:
+                loop = asyncio.get_running_loop()
+                sim_pdf_bytes, ai_pdf_bytes = loop.run_until_complete(send_doc_and_get_reports(local_path))  # type: ignore
+            except RuntimeError:
+                sim_pdf_bytes, ai_pdf_bytes = asyncio.run(send_doc_and_get_reports(local_path))
         except Exception as e:
             print(f"Telegram gateway failed for chunk {chunk_id}: {e}")
             update_chunk_status_in_db(chunk_id, 'telegram_failed')
@@ -58,7 +63,6 @@ def process_chunk_for_turnitin(message: str):
         # ai_report_url = upload_file(ai_pdf_bytes, f"reports/{chunk_id}_ai.pdf", "application/pdf")
         sim_report_url = f"s3://your-bucket/reports/{chunk_id}_sim.pdf"
         ai_report_url = f"s3://your-bucket/reports/{chunk_id}_ai.pdf"
-
 
         # 4. Update the chunk status in the database to 'needs_edit'
         # This indicates the chunk is ready for a human checker.

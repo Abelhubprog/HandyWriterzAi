@@ -2,11 +2,15 @@ import { NextRequest } from 'next/server';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
+type Params = {
+  traceId: string;
+};
+
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ traceId: string }> }
+  { params }: { params: Params }
 ) {
-  const { traceId } = await context.params;
+  const { traceId } = params;
 
   // Create a TransformStream for SSE
   const encoder = new TextEncoder();

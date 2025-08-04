@@ -1,0 +1,163 @@
+# Output Contract: Doctoral Dissertation
+
+## Required Manuscript Structure
+Produce a **complete dissertation manuscript** in markdown format with the following mandatory sections:
+
+### **Abstract** (400-500 words)
+- **Problem Statement**: Research context and significance
+- **Objectives**: Clear research questions and aims  
+- **Methodology**: Research design and analytical approach summary
+- **Key Findings**: Primary results and discoveries
+- **Conclusions**: Implications and contributions to field
+- **Keywords**: 5-7 key terms for indexing
+
+### **1. Introduction** (4,000-6,000 words)
+- **Research Context**: Background establishing problem significance
+- **Literature Foundation**: Key theoretical frameworks and existing knowledge
+- **Research Gap**: Clear identification of knowledge gaps addressed
+- **Research Questions**: Specific, answerable questions guiding investigation
+- **Objectives and Hypotheses**: Measurable aims and predicted outcomes
+- **Significance**: Contribution to academic knowledge and practical applications
+- **Dissertation Organization**: Chapter overview and logical structure
+
+### **2. Literature Review** (8,000-12,000 words)
+- **Systematic Search Strategy**: Databases, keywords, inclusion/exclusion criteria
+- **Theoretical Frameworks**: Comprehensive analysis of relevant theories
+- **Empirical Studies**: Critical evaluation of existing research findings
+- **Methodological Approaches**: Review of research methods in the field  
+- **Gaps and Controversies**: Identification of unresolved questions and debates
+- **Synthesis**: Integration of literature leading to research rationale
+- **Chapter Summary**: Key insights and transition to methodology
+
+### **3. Methodology** (5,000-8,000 words)
+- **Research Philosophy**: Epistemological and ontological foundations
+- **Research Design**: Comprehensive design rationale and alternatives considered
+- **Population and Sampling**: Target population, sampling strategy, and size justification
+- **Data Collection**: Detailed procedures, instruments, and protocols
+- **Data Analysis**: Analytical framework, software, and statistical/qualitative methods
+- **Validity and Reliability**: Measures ensuring research quality and trustworthiness
+- **Ethical Considerations**: IRB approval, consent, confidentiality, and ethical safeguards
+- **Limitations**: Acknowledged constraints and potential biases
+- **Chapter Summary**: Methodology overview and transition to results
+
+### **4. Results and Analysis** (8,000-15,000 words)
+- **Data Overview**: Participant characteristics, response rates, data quality
+- **Research Question 1**: Comprehensive analysis addressing first research question
+- **Research Question 2**: Complete analysis for second research question  
+- **[Additional Questions]**: Systematic treatment of all research questions
+- **Supplementary Analyses**: Exploratory findings and unexpected discoveries
+- **Integration**: Synthesis of findings across research questions
+- **Chapter Summary**: Key results and preparation for discussion
+
+### **5. Discussion** (6,000-10,000 words)
+- **Findings Interpretation**: Contextualization within existing literature
+- **Theoretical Contributions**: Advancement of theoretical understanding
+- **Practical Implications**: Real-world applications and policy recommendations
+- **Comparison with Previous Research**: Agreement, contradictions, and novel insights
+- **Limitations and Constraints**: Honest assessment of study boundaries
+- **Future Research Directions**: Specific recommendations for subsequent investigations
+- **Chapter Summary**: Key discussion points and transition to conclusion
+
+### **6. Conclusion** (2,000-3,000 words)
+- **Research Summary**: Synthesis of entire dissertation journey
+- **Key Contributions**: Original contributions to academic knowledge
+- **Theoretical Advances**: How findings extend or challenge existing theories
+- **Practical Applications**: Implementation recommendations and societal impact
+- **Personal Reflections**: Learning journey and professional development insights
+- **Final Thoughts**: Closing perspective on research significance and future
+
+### **References** 
+- **Minimum {{ quality_metrics.citation_count_min|default(40) }} sources** in {{ citation_style|upper|default("APA") }} format
+- **Majority peer-reviewed** journal articles and scholarly books
+- **Currency**: 70% of sources within {{ sources_policy.recency_preference|default("10 years") }}
+- **Diversity**: Multiple perspectives and methodological approaches represented
+- **Quality**: High-impact, credible academic sources with proper DOI/URL inclusion
+
+### **Appendices**
+- **A. Research Instruments**: Surveys, interview guides, observation protocols
+- **B. Ethical Approvals**: IRB documentation and consent forms
+- **C. Additional Data**: Supplementary tables, figures, and statistical outputs
+- **D. Methodological Details**: Extended procedures and technical specifications
+
+## Quality Metrics and Standards
+
+### **Quantitative Requirements**
+```json
+{
+  "total_word_count": {{ word_count_target|default(60000) }},
+  "word_count_tolerance": {{ (output_contract.word_count_tolerance * 100)|round }}%,
+  "minimum_citations": {{ quality_metrics.citation_count_min|default(40) }},
+  "peer_reviewed_percentage": 75,
+  "recent_sources_percentage": 70,
+  "coherence_threshold": {{ quality_metrics.coherence_threshold|default(0.9) }},
+  "originality_target": {{ quality_metrics.originality_threshold|default(0.85) }},
+  "evidence_coverage": {{ quality_metrics.evidence_coverage_threshold|default(0.85) }}
+}
+```
+
+### **Academic Standards Compliance**
+- **Citation Accuracy**: All sources verifiable and properly attributed
+- **Methodological Rigor**: Replication-enabling detail and transparency
+- **Academic Voice**: Consistent doctoral-level scholarly discourse
+- **Logical Structure**: Clear progression building toward comprehensive conclusions
+- **Original Contribution**: Demonstrable advancement of knowledge in the field
+
+## Final Deliverables Package
+
+### **Primary Manuscript** 
+Complete dissertation in markdown format meeting all structural requirements
+
+### **Quality Assessment Summary**
+```json
+{
+  "manuscript_metadata": {
+    "word_count": "<actual_count>",
+    "citation_count": "<total_citations>",
+    "peer_reviewed_sources": "<count_and_percentage>",
+    "chapters_completed": 8,
+    "appendices_included": "<count>"
+  },
+  "quality_metrics": {
+    "coherence_score": "<0.0-1.0>",
+    "originality_assessment": "<0.0-1.0>",
+    "evidence_coverage_score": "<0.0-1.0>",
+    "methodological_rigor": "<assessment>",
+    "contribution_significance": "<evaluation>"
+  },
+  "compliance_verification": {
+    "citation_style_consistency": true,
+    "ethical_standards_met": true,
+    "institutional_requirements": "addressed",
+    "plagiarism_risk": "<assessment>",
+    "publication_readiness": "<evaluation>"
+  }
+}
+```
+
+### **Research Contribution Statement**
+- **Primary Contribution**: Clear articulation of novel knowledge advancement
+- **Secondary Contributions**: Additional insights and methodological innovations
+- **Field Impact**: Anticipated influence on academic discourse and practice
+- **Publication Potential**: Journal articles and conference presentations identified
+
+{% if has_files %}
+## File Integration Requirements
+**Integration of {{ files_count }} Uploaded Files**:
+- Reference each file by name when incorporating content
+- Provide clear explanation of how file content supports research objectives
+- Integrate file-derived data, concepts, or methodologies appropriately within dissertation structure
+- Maintain proper attribution and citation for all file-sourced information
+- Use file content to strengthen literature review, methodology, or analysis sections as appropriate
+{% endif %}
+
+## Pre-Submission Validation Checklist
+- [ ] All required sections present and complete
+- [ ] Word count within specified tolerance range
+- [ ] Minimum citation requirements met with quality sources
+- [ ] Citation style consistency throughout manuscript
+- [ ] Methodological detail enables replication
+- [ ] Original contribution clearly articulated
+- [ ] Quality metrics meet or exceed thresholds
+- [ ] Academic integrity standards maintained
+- [ ] Professional presentation and formatting
+- [ ] Comprehensive reference list with complete information

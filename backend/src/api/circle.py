@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from datetime import datetime
 
-from db.database import get_db
-from db.models import StudyCircle, StudyCircleMember, StudyCircleDocument, User, Document
+from src.db.database import get_db
+from src.db.models import StudyCircle, StudyCircleMember, StudyCircleDocument, User, Document
 from src.services.supabase_service import get_supabase_client
 
 router = APIRouter(
@@ -13,7 +14,7 @@ router = APIRouter(
 # A placeholder for getting the current user's ID
 def get_current_user_id() -> str:
     # In a real app, this would come from a JWT token
-    return "some-hardcoded-user-id" # Replace with a valid UUID from your db for testing
+    return "some-hardcoded-user-id"  # Replace with a valid UUID from your db for testing
 
 @router.post("/create")
 def create_study_circle(name: str, db: Session = Depends(get_db), owner_id: str = Depends(get_current_user_id)):
@@ -65,7 +66,7 @@ async def send_circle_message(circle_id: str, message: str, user_id: str = Depen
     """Sends a real-time message to a study circle via Supabase."""
     supabase = get_supabase_client()
     channel = supabase.channel(f"study_circle_{circle_id}")
-    
+
     payload = {
         "event": "new_message",
         "payload": {
@@ -74,6 +75,6 @@ async def send_circle_message(circle_id: str, message: str, user_id: str = Depen
             "timestamp": datetime.utcnow().isoformat()
         }
     }
-    
+
     await channel.send(payload)
     return {"message": "Message sent"}

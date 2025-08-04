@@ -55,15 +55,17 @@ export function ExpandedSidebar({
   const [isLoading, setIsLoading] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
 
-  // Load conversations from local storage
+  // Load conversations from Zustand store (which handles localStorage)
   useEffect(() => {
     const loadConversations = () => {
       setIsLoading(true);
 
       try {
-        import('@/lib/conversationStore').then(({ ConversationStore }) => {
-          const storedConversations = ConversationStore.getAllConversations();
-          setConversations(storedConversations);
+        import('@/store/useChatStore').then(({ useChatStore }) => {
+          const store = useChatStore.getState();
+          store.loadConversations();
+          const storeConversations = store.conversations;
+          setConversations(storeConversations);
           setIsLoading(false);
         });
       } catch (error) {

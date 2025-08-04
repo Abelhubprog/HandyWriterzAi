@@ -83,6 +83,13 @@ class RevolutionaryWriterAgent(StreamingNode):
             user_params = state.get("user_params", {})
             uploaded_docs = state.get("uploaded_docs", [])
             
+            # Extract prompt orchestration metadata
+            prompt_metadata = state.get("prompt_metadata", {})
+            output_contract = prompt_metadata.get("output_contract", {})
+            use_case = prompt_metadata.get("use_case", "general")
+            
+            self.logger.info(f"🎯 Writing for use case: {use_case} with output contract: {bool(output_contract)}")
+            
             # Validate inputs
             if not filtered_sources and not evidence_map:
                 raise NodeError("No validated sources or evidence provided for writing", self.name)
@@ -155,14 +162,43 @@ class RevolutionaryWriterAgent(StreamingNode):
             raise NodeError(f"Revolutionary writing execution failed: {e}", self.name)
     
     async def _design_content_structure(self, state: HandyWriterzState, sources: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Design a detailed content structure using an LLM."""
+        """Design a detailed content structure using output contract from prompt orchestration."""
         try:
             user_params = state.get("user_params", {})
             writeup_type = user_params.get("writeupType", "essay")
             word_count = user_params.get("wordCount", 1000)
             
-            # Create a prompt for the LLM to generate a content plan
-            prompt = self._create_content_plan_prompt(user_params, sources)
+            # Extract prompt orchestration data
+            prompt_metadata = state.get("prompt_metadata", {})
+            output_contract = prompt_metadata.get("output_contract", {})
+            use_case = prompt_metadata.get("use_case", "general")
+            
+            # Use output contract sections if available, otherwise fallback to traditional planning
+            if output_contract and output_contract.get("sections"):
+                self.logger.info(f"📋 Using output contract sections for {use_case}: {output_contract['sections']}")
+                
+                # Build structured content plan from output contract
+                content_plan = {
+                    "structure": {
+                        "sections": output_contract["sections"],
+                        "format_type": output_contract.get("format_type", "markdown"),
+                        "required_fields": output_contract.get("required_fields", []),
+                        "word_count_target": output_contract.get("word_count_target", word_count),
+                        "citation_requirements": output_contract.get("citation_requirements", {})
+                    },
+                    "use_case": use_case,
+                    "quality_standards": {
+                        "coherence_threshold": 0.9,
+                        "citation_density": len(sources) / max(word_count // 1000, 1),
+                        "academic_tone": True
+                    }
+                }
+                
+                return content_plan
+            else:
+                # Fallback to traditional LLM-based content planning
+                self.logger.info("📋 Using traditional LLM-based content planning")
+                prompt = self._create_content_plan_prompt(user_params, sources)
             
             # Use a model to generate the content plan
             model_client = self.primary_client

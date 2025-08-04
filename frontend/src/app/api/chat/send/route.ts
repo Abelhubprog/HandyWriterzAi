@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       throw new Error('No trace_id received from backend');
     }
 
-    console.log('Got trace_id:', traceId, 'Now streaming from:', `${BACKEND_URL}/api/chat/stream/${traceId}`);
+    console.log('Got trace_id:', traceId, 'Now streaming real agent events from:', `${BACKEND_URL}/api/stream/${traceId}`);
 
     // Create streaming response
     const encoder = new TextEncoder();
@@ -66,8 +66,8 @@ export async function POST(request: NextRequest) {
       try {
         await writer.write(encoder.encode('data: {"event": "connected"}\n\n'));
 
-        // Stream from backend
-        const streamResponse = await fetch(`${BACKEND_URL}/api/chat/stream/${traceId}`, {
+        // Stream from backend (real SSE endpoint - uses conversation_id)
+        const streamResponse = await fetch(`${BACKEND_URL}/api/stream/${traceId}`, {
           method: 'GET',
           headers: {
             'Accept': 'text/event-stream',
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
                   await writer.write(encoder.encode('data: [DONE]\n\n'));
                   return;
                 }
-                
+
                 try {
                   const parsed = JSON.parse(data);
                   if (parsed.token || parsed.content) {
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
           await writer.write(encoder.encode(`data: ${JSON.stringify({ token })}\n\n`));
           await new Promise(resolve => setTimeout(resolve, 50));
         }
-        
+
         await writer.write(encoder.encode('data: [DONE]\n\n'));
       } finally {
         await writer.close();
@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Backend connection failed, using fallback:', error);
-    
+
     // Fallback to local response if backend is unavailable
     const encoder = new TextEncoder();
     const stream = new TransformStream();
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
     (async () => {
       try {
         await writer.write(encoder.encode('data: {"event": "connected"}\n\n'));
-        
+
         const response = generateDynamicResponse(body.content, body.writeupType);
         const words = response.split(' ');
 
@@ -181,13 +181,13 @@ export async function POST(request: NextRequest) {
 
 function generateDynamicResponse(userContent: string, writeupType: string): string {
   const contentWords = userContent.toLowerCase();
-  
+
   // Analyze user input for key topics and themes
   const hasResearch = contentWords.includes('research') || contentWords.includes('study') || contentWords.includes('analysis');
   const hasWriting = contentWords.includes('write') || contentWords.includes('essay') || contentWords.includes('article');
   const hasTechnical = contentWords.includes('technical') || contentWords.includes('code') || contentWords.includes('programming');
   const hasAcademic = contentWords.includes('academic') || contentWords.includes('dissertation') || contentWords.includes('thesis');
-  
+
   // Generate contextual response based on writeup type and content
   if (writeupType === 'dissertation' || hasAcademic) {
     return `I'll help you develop a comprehensive academic work on this topic. Based on your request about "${userContent.slice(0, 100)}${userContent.length > 100 ? '...' : ''}", I can assist with:
@@ -211,7 +211,7 @@ function generateDynamicResponse(userContent: string, writeupType: string): stri
 
 Would you like me to elaborate on any specific section or provide more detailed guidance for your academic work?`;
   }
-  
+
   if (writeupType === 'report' || hasResearch) {
     return `I'll create a comprehensive report addressing your inquiry about "${userContent.slice(0, 80)}${userContent.length > 80 ? '...' : ''}". Here's my analysis:
 
@@ -233,7 +233,7 @@ I recommend focusing on the most critical aspects first while building a foundat
 
 Would you like me to dive deeper into any specific area of this analysis?`;
   }
-  
+
   if (hasTechnical) {
     return `I understand you're looking for technical assistance with "${userContent.slice(0, 100)}${userContent.length > 100 ? '...' : ''}". Let me provide a structured approach:
 
@@ -256,7 +256,7 @@ Your request involves technical considerations that require careful planning and
 
 I can provide more specific technical details, code examples, or implementation guidance based on your particular requirements. What aspect would you like to explore further?`;
   }
-  
+
   // Default response for general writing requests
   return `Thank you for your request about "${userContent.slice(0, 100)}${userContent.length > 100 ? '...' : ''}". I'm here to provide comprehensive writing assistance tailored to your specific needs.
 

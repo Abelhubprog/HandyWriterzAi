@@ -176,22 +176,8 @@ class ModelRegistry:
                         "model_id": provider_model_id
                     }
         
-        # Add hardcoded mappings for known aliases
-        hardcoded_mappings = {
-            "o3-reasoner": {"provider": "openai", "model_id": "o1-preview"},
-            "o3-mini": {"provider": "openai", "model_id": "o1-mini"},
-            "sonar-deep": {"provider": "perplexity", "model_id": "llama-3.1-sonar-large-128k-online"},
-            "sonar-fast": {"provider": "perplexity", "model_id": "llama-3.1-sonar-small-128k-online"},
-            "gemini-pro": {"provider": "gemini", "model_id": "gemini-pro"},
-            "gemini-flash": {"provider": "gemini", "model_id": "gemini-1.5-flash"},
-            "claude-sonnet": {"provider": "anthropic", "model_id": "claude-3-sonnet-20240229"},
-            "claude-haiku": {"provider": "anthropic", "model_id": "claude-3-haiku-20240307"},
-        }
-        
-        # Merge hardcoded mappings (prioritize config over hardcoded)
-        for logical_id, mapping in hardcoded_mappings.items():
-            if logical_id not in logical_mappings:
-                logical_mappings[logical_id] = mapping
+        # Hardcoded mappings removed - all aliases must be defined in model_config.yaml
+        # This ensures version control and auditability of model mappings
         
         # Build final registry with pricing
         for logical_id, mapping in logical_mappings.items():

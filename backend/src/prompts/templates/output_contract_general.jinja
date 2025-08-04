@@ -1,0 +1,96 @@
+# Output Contract: General Academic Assistant
+
+## Required Structure Format
+Provide your response using the following **markdown structure**:
+
+### **Plan** (Required)
+Present a concise 3-5 bullet point outline showing:
+- Your approach methodology
+- Key deliverables you will provide  
+- Any assumptions you are making
+- Expected completion scope
+
+Example:
+```markdown
+## Plan
+- Analyze the research question using systematic literature review approach
+- Gather evidence from 5-8 credible academic sources
+- Synthesize findings into coherent analysis with practical implications
+- Provide actionable recommendations with implementation considerations
+```
+
+### **Answer/Analysis** (Required)
+- Use clear **heading structure** appropriate to content complexity
+- For simple queries: Direct response with supporting evidence
+- For complex analysis: Multi-section breakdown with logical flow
+- Include **inline citations** for any factual claims requiring verification
+- Maintain {{ academic_level|default("graduate") }}-appropriate language and depth
+
+### **Assumptions and Limitations** (When Applicable)
+Include this section when:
+- Critical information is missing or unclear
+- Conclusions rely on reasonable assumptions
+- Scope limitations affect comprehensiveness
+- Evidence gaps exist that impact analysis quality
+
+Example:
+```markdown
+## Assumptions and Limitations
+- Analysis assumes standard institutional academic requirements
+- Limited to English-language sources due to accessibility constraints  
+- Recommendations based on general best practices; specific context may require modifications
+```
+
+### **References** (When External Claims Made)
+**Format**: {{ citation_style|upper|default("APA") }} style with complete information
+**Include for**: Any factual claims beyond general academic knowledge
+**Required elements**: Author, year, title, source, DOI/URL when available
+
+Example format:
+```markdown
+## References
+Smith, J. A. (2023). Advanced research methodologies in academic writing. *Journal of Academic Excellence*, 15(3), 245-267. https://doi.org/10.1000/example
+```
+
+## Content Quality Standards
+- **Coherence**: Logical flow connecting all sections meaningfully
+- **Evidence**: Claims supported by credible sources when verification needed
+- **Clarity**: Accessible language maintaining academic precision
+- **Completeness**: Address all aspects of user query within scope limitations
+- **Practicality**: Include actionable insights where appropriate
+
+## Response Length Guidelines
+{% if word_count_target %}
+**Target length**: {{ word_count_target }} words (±{{ (output_contract.word_count_tolerance * 100)|round }}%)
+{% else %}
+**Adaptive length based on complexity**:
+- Simple queries: 200-500 words
+- Moderate analysis: 500-1,200 words  
+- Complex research questions: 1,200-2,500 words
+{% endif %}
+
+## Special Formatting Requirements
+{% if has_files %}
+### File Integration
+- **Reference uploaded files** by name when incorporating their content
+- **Explain how file content** influences your analysis or recommendations
+- **Cite file-derived information** appropriately within your response structure
+{% endif %}
+
+{% if is_long_form %}
+### Extended Analysis Format
+For comprehensive responses:
+- Use **numbered sections** for major topic areas
+- Include **subsection headings** for complex topics
+- Provide **transition sentences** connecting major sections
+- Consider **summary boxes** for key insights
+{% endif %}
+
+## Final Quality Check
+Before submission, verify:
+- [ ] Plan section clearly outlines approach and deliverables
+- [ ] Answer addresses all aspects of the user query
+- [ ] Citations provided for external knowledge claims
+- [ ] Limitations acknowledged where appropriate
+- [ ] Language appropriate to {{ academic_level|default("graduate") }} academic level
+- [ ] Structure enables easy navigation and comprehension

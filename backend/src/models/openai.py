@@ -64,6 +64,37 @@ class OpenAIProvider(BaseProvider):
         """Send chat messages to OpenAI and get response"""
 
         model_name = model or self.get_default_model()
+        
+        # Try advanced service first (production path)
+        try:
+            from src.services.advanced_llm_service import AdvancedLLMService
+            from src.services.advanced_llm_service import ModelProvider
+            
+            advanced_service = AdvancedLLMService()
+            if advanced_service and hasattr(advanced_service, 'generate_response'):
+                # Convert to format expected by AdvancedLLMService
+                prompt = "\n".join([f"{msg.role}: {msg.content}" for msg in messages])
+                response_data = await advanced_service.generate_response(
+                    prompt=prompt,
+                    provider=ModelProvider.OPENAI,
+                    model=model_name,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    **kwargs
+                )
+                
+                if response_data and "content" in response_data:
+                    return ChatResponse(
+                        content=response_data["content"],
+                        model=model_name,
+                        provider=self.provider_name,
+                        usage=response_data.get("usage", {}),
+                        metadata=response_data.get("metadata", {})
+                    )
+        except (ImportError, Exception) as e:
+            logger.debug(f"AdvancedLLMService not available, using direct API: {e}")
+        
+        # Fallback to direct API (legacy path)
         openai_messages = self._convert_messages(messages)
 
         try:

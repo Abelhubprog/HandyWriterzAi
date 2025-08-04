@@ -1,0 +1,118 @@
+# ChatOrchestrator Policies Configuration
+# Externalized policies for model selection and task routing
+
+# Provider restrictions by task type
+provider_restrictions:
+  GENERAL:
+    allowed_providers: [openai, anthropic, gemini, perplexity, openrouter]
+    preferred_providers: [gemini, openai]
+    fallback_order: [gemini, openai, anthropic]
+    
+  ACADEMIC_WRITING:
+    allowed_providers: [openai, anthropic, perplexity]
+    preferred_providers: [openai, anthropic]
+    fallback_order: [openai, anthropic, perplexity]
+    excluded_providers: [gemini]  # Excluded for non-GENERAL tasks as per original logic
+    
+  RESEARCH:
+    allowed_providers: [perplexity, openai, anthropic]
+    preferred_providers: [perplexity, openai]
+    fallback_order: [perplexity, openai, anthropic]
+    
+  CODE_ANALYSIS:
+    allowed_providers: [openai, anthropic, openrouter]
+    preferred_providers: [openai]
+    fallback_order: [openai, anthropic, openrouter]
+    
+  CREATIVE_WRITING:
+    allowed_providers: [anthropic, openai, openrouter]
+    preferred_providers: [anthropic, openai]
+    fallback_order: [anthropic, openai, openrouter]
+
+# Model selection criteria and weights
+selection_criteria:
+  cost_weight: 0.3
+  performance_weight: 0.4
+  availability_weight: 0.2
+  specialization_weight: 0.1
+
+# Provider-specific configurations
+provider_configs:
+  openai:
+    max_retries: 3
+    timeout: 60
+    rate_limit_buffer: 0.8  # Use 80% of rate limit
+    preferred_models: [gpt-4-turbo, gpt-4, gpt-3.5-turbo]
+    
+  anthropic:
+    max_retries: 3
+    timeout: 90
+    rate_limit_buffer: 0.9
+    preferred_models: [claude-3-opus-20240229, claude-3-sonnet-20240229]
+    
+  gemini:
+    max_retries: 2
+    timeout: 45
+    rate_limit_buffer: 0.9
+    preferred_models: [gemini-1.5-pro, gemini-1.5-flash]
+    
+  perplexity:
+    max_retries: 3
+    timeout: 120  # Longer timeout for search tasks
+    rate_limit_buffer: 0.8
+    preferred_models: [llama-3.1-sonar-large-128k-online]
+    
+  openrouter:
+    max_retries: 2
+    timeout: 75
+    rate_limit_buffer: 0.7
+    preferred_models: [deepseek/deepseek-chat]
+
+# Task-specific model preferences
+task_model_preferences:
+  GENERAL:
+    high_performance: [gpt-4-turbo, claude-3-opus-20240229, gemini-1.5-pro]
+    balanced: [gpt-4, claude-3-sonnet-20240229, gemini-1.5-flash]
+    cost_effective: [gpt-3.5-turbo, gemini-1.5-flash]
+    
+  ACADEMIC_WRITING:
+    high_performance: [gpt-4-turbo, claude-3-opus-20240229]
+    balanced: [gpt-4, claude-3-sonnet-20240229]
+    cost_effective: [gpt-3.5-turbo]
+    
+  RESEARCH:
+    high_performance: [llama-3.1-sonar-large-128k-online, gpt-4-turbo]
+    balanced: [llama-3.1-sonar-small-128k-online, gpt-4]
+    cost_effective: [gpt-3.5-turbo]
+
+# Failure handling policies
+failure_policies:
+  max_fallback_attempts: 3
+  circuit_breaker:
+    failure_threshold: 5
+    recovery_timeout: 300  # 5 minutes
+    
+  provider_cooldown:
+    on_rate_limit: 300     # 5 minutes
+    on_service_error: 60   # 1 minute
+    on_auth_error: 1800    # 30 minutes
+
+# Quality thresholds
+quality_thresholds:
+  min_confidence_score: 0.7
+  max_latency_ms: 30000  # 30 seconds
+  min_context_utilization: 0.5
+
+# Cost control policies
+cost_policies:
+  max_cost_per_request: 5.0  # USD
+  preferred_cost_range: [0.01, 1.0]  # USD range
+  cost_optimization_enabled: true
+
+# Monitoring and metrics
+monitoring:
+  track_provider_performance: true
+  track_model_performance: true
+  track_cost_efficiency: true
+  alert_on_high_failure_rate: true
+  failure_rate_threshold: 0.1  # 10%

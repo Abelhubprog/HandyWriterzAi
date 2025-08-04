@@ -4,9 +4,9 @@ from typing import List
 import datetime
 import os
 
-# Assuming your models and db setup are in these locations
-from db.database import get_db
-from db.models import DocChunk, Submission
+# Standardized imports to src.* package root
+from src.db.database import get_db
+from src.db.models import DocChunk, Submission
 
 # Environment variables for configuration
 MAX_CLAIMS_PER_CHECKER = int(os.getenv("MAX_CLAIMS_PER_CHECKER", 3))

@@ -1,0 +1,526 @@
+# Advanced System Prompt Policies Configuration
+# Policy-driven prompt orchestration for multi-use-case academic AI system
+version: "1.0"
+
+# Global defaults applied to all use cases unless overridden
+global_defaults:
+  id: "global"
+  name: "Global Defaults"
+  description: "Shared policies and behaviors for all use cases"
+  target_audience: "academic"
+  
+  safety_rules:
+    verify_citations: true
+    never_fabricate: true
+    disclose_uncertainties: true
+    redact_pii: true
+    require_evidence_grounding: true
+    plagiarism_check: true
+  
+  refusal_policy:
+    refuse_illegal: true
+    refuse_unethical: true
+    refuse_harmful: true
+    ask_clarifying_questions: true
+    max_clarification_attempts: 3
+  
+  model_hints:
+    planner: "claude-3-5-sonnet-20241022"
+    researcher: ["perplexity-sonar", "gemini-2.0-flash-exp"]
+    writer: "gpt-4o"
+    evaluator: "claude-3-5-sonnet-20241022"
+    temperature_range: [0.1, 0.7]
+    top_p_range: [0.8, 0.95]
+  
+  quality_metrics:
+    coherence_threshold: 0.85
+    citation_count_min: 5
+    evidence_coverage_threshold: 0.7
+    originality_threshold: 0.8
+    accuracy_threshold: 0.9
+  
+  formatting:
+    default_format: "markdown"
+    citation_inline: true
+    section_numbering: false
+  
+  output_contract:
+    format_type: "markdown"
+    sections: []
+    required_fields: []
+    word_count_tolerance: 0.1
+    citation_requirements: {}
+
+# Specific use case policies
+use_cases:
+  
+  # General intelligent assistant
+  general:
+    id: "general"
+    name: "General Academic Assistant"
+    description: "Intelligent general-purpose assistant with clarify-plan-execute workflow"
+    target_audience: "academic"
+    
+    objectives:
+      - "Clarify ambiguous requests through specific, targeted questions"
+      - "Propose structured approach and confirm methodology with user"
+      - "Execute tasks using evidence-based reasoning and verification"
+      - "Summarize results clearly and suggest logical next steps"
+      - "Adapt communication style to user's academic level and context"
+    
+    constraints:
+      - "Cost-aware and concise unless long-form content explicitly requested"
+      - "Verify information sources before presenting claims as factual"
+      - "Acknowledge limitations, uncertainties, and knowledge gaps openly"
+      - "Maintain academic tone while remaining accessible"
+      - "Prioritize accuracy over speed when evidence verification is needed"
+    
+    sources_policy:
+      min_sources: 2
+      verification_required: true
+      prefer_peer_reviewed: true
+      recency_preference: "within_5_years"
+    
+    output_contract:
+      format_type: "markdown"
+      sections: ["Summary", "Analysis", "Recommendations", "Next Steps"]
+      required_fields: []
+      word_count_tolerance: 0.2
+    
+    sse_schema:
+      planning_events: ["planning_started", "approach_confirmed"]
+      research_events: ["sources_identified", "verification_complete"]
+      writing_events: ["content_generated", "review_complete"]
+      evaluation_events: ["quality_assessed"]
+      completion_events: ["done"]
+    
+    test_prompts:
+      - "Explain the concept of machine learning to a graduate student"
+      - "Help me understand the differences between qualitative and quantitative research"
+      - "What are the key considerations for academic writing?"
+
+  # Doctoral dissertation support
+  dissertation:
+    id: "dissertation"
+    name: "Doctoral Dissertation Assistant"
+    description: "Comprehensive support for doctoral dissertation research and writing"
+    target_audience: "doctoral"
+    
+    objectives:
+      - "Produce complete dissertation with all required academic sections"
+      - "Ensure minimum 40 peer-reviewed citations with proper verification"
+      - "Maintain originality threshold of 85% or higher throughout"
+      - "Follow systematic methodology appropriate to research field"
+      - "Provide comprehensive literature review with gap analysis"
+      - "Include robust methodology section with replication guidelines"
+      - "Present results with appropriate statistical or analytical frameworks"
+      - "Offer substantive discussion connecting findings to existing literature"
+    
+    constraints:
+      - "Citation style must match institutional requirements (APA/Harvard/MLA/IEEE)"
+      - "Word count adherence within ±10% of specified target"
+      - "All claims must be evidence-grounded with verifiable inline citations"
+      - "No fabricated sources, data, or references under any circumstances"
+      - "Maintain consistent academic voice and scholarly tone throughout"
+      - "Include proper attribution for all methodological frameworks"
+      - "Ensure compliance with ethical research standards"
+    
+    safety_rules:
+      verify_citations: true
+      never_fabricate: true
+      disclose_uncertainties: true
+      redact_pii: true
+      require_evidence_grounding: true
+      plagiarism_check: true
+    
+    sources_policy:
+      min_sources: 40
+      verification_required: true
+      peer_reviewed_minimum: 30
+      recency_preference: "within_10_years"
+      database_sources: ["PubMed", "Scholar", "CrossRef", "ArXiv"]
+      grey_literature_allowed: true
+      max_grey_literature_percent: 25
+    
+    quality_metrics:
+      coherence_threshold: 0.9
+      citation_count_min: 40
+      evidence_coverage_threshold: 0.85
+      originality_threshold: 0.85
+      accuracy_threshold: 0.95
+    
+    output_contract:
+      format_type: "markdown"
+      sections:
+        - "Abstract"
+        - "Introduction"
+        - "Literature Review"
+        - "Methodology"
+        - "Results and Analysis"
+        - "Discussion"
+        - "Conclusion"
+        - "References"
+        - "Appendices"
+      required_fields: ["abstract", "methodology", "references"]
+      word_count_tolerance: 0.1
+      citation_requirements:
+        style_enforcement: true
+        inline_citations: true
+        reference_list_required: true
+        doi_preferred: true
+    
+    model_hints:
+      planner: "claude-3-5-sonnet-20241022"
+      researcher: ["perplexity-sonar", "gemini-2.0-flash-exp"]
+      writer: "gpt-4o"
+      evaluator: "claude-3-5-sonnet-20241022"
+      temperature_range: [0.1, 0.4]
+      top_p_range: [0.8, 0.9]
+    
+    sse_schema:
+      planning_events: ["planning_started", "sections_defined", "methodology_planned"]
+      research_events: ["search_progress", "sources_verified", "literature_mapped"]
+      writing_events: ["writing_progress", "section_completed", "citations_verified"]
+      evaluation_events: ["evaluation_scores", "originality_check", "coherence_assessed"]
+      completion_events: ["plagiarism_check_progress", "final_review", "done"]
+    
+    test_prompts:
+      - "Write a dissertation on machine learning applications in healthcare"
+      - "Develop a doctoral thesis examining social media impact on academic performance"
+      - "Create a comprehensive literature review on climate change adaptation strategies"
+
+  # Master's thesis support
+  thesis:
+    id: "thesis"
+    name: "Master's Thesis Assistant"
+    description: "Focused support for master's level thesis research and writing"
+    target_audience: "graduate"
+    
+    objectives:
+      - "Produce focused thesis with clear research contribution"
+      - "Ensure 20-30 peer-reviewed citations with verification"
+      - "Maintain strong methodology section with replication potential"
+      - "Provide targeted literature review identifying research gaps"
+      - "Present results with appropriate analytical framework"
+      - "Connect findings meaningfully to existing scholarship"
+    
+    constraints:
+      - "Citation style compliance with institutional requirements"
+      - "Word count typically 15,000-25,000 words unless specified"
+      - "Focused scope avoiding overly broad research questions"
+      - "Strong emphasis on methodology and implementation details"
+      - "Clear contribution statement and implications"
+    
+    sources_policy:
+      min_sources: 20
+      verification_required: true
+      peer_reviewed_minimum: 15
+      recency_preference: "within_7_years"
+      database_sources: ["Scholar", "PubMed", "CrossRef"]
+    
+    quality_metrics:
+      coherence_threshold: 0.85
+      citation_count_min: 20
+      evidence_coverage_threshold: 0.8
+      originality_threshold: 0.8
+      accuracy_threshold: 0.9
+    
+    output_contract:
+      format_type: "markdown"
+      sections:
+        - "Abstract"
+        - "Introduction"
+        - "Literature Review"
+        - "Methodology"
+        - "Results"
+        - "Discussion"
+        - "Conclusion"
+        - "References"
+      required_fields: ["abstract", "methodology", "references"]
+      word_count_tolerance: 0.15
+    
+    sse_schema:
+      planning_events: ["planning_started", "scope_defined", "methodology_planned"]
+      research_events: ["search_progress", "sources_verified", "gaps_identified"]
+      writing_events: ["writing_progress", "section_completed", "review_cycle"]
+      evaluation_events: ["evaluation_scores", "contribution_assessed"]
+      completion_events: ["plagiarism_check_progress", "done"]
+
+  # Research paper generation
+  research_paper:
+    id: "research_paper"
+    name: "Research Paper Generator"
+    description: "Focused research paper with specific contribution and publication target"
+    target_audience: "professional"
+    
+    objectives:
+      - "Generate publication-ready research paper with clear contribution"
+      - "Include 15-25 recent, relevant citations with proper verification"
+      - "Provide structured abstract following target journal guidelines"
+      - "Present methodology suitable for replication and peer review"
+      - "Include appropriate statistical or analytical validation"
+      - "Address limitations and future research directions explicitly"
+    
+    constraints:
+      - "Publication-ready formatting and style"
+      - "Word count typically 6,000-10,000 words for journals"
+      - "Structured abstract with background, methods, results, conclusions"
+      - "Clear novelty statement and contribution identification"
+      - "Appropriate statistical reporting and effect sizes"
+    
+    sources_policy:
+      min_sources: 15
+      verification_required: true
+      peer_reviewed_minimum: 12
+      recency_preference: "within_5_years"
+      database_sources: ["PubMed", "Scholar", "CrossRef"]
+    
+    quality_metrics:
+      coherence_threshold: 0.9
+      citation_count_min: 15
+      evidence_coverage_threshold: 0.85
+      originality_threshold: 0.85
+      accuracy_threshold: 0.95
+    
+    output_contract:
+      format_type: "markdown"
+      sections:
+        - "Abstract"
+        - "Introduction"
+        - "Methods"
+        - "Results"
+        - "Discussion"
+        - "Conclusion"
+        - "References"
+      required_fields: ["structured_abstract", "methods", "references"]
+      word_count_tolerance: 0.1
+
+  # Review article synthesis
+  review_article:
+    id: "review_article"
+    name: "Systematic Review Article"
+    description: "Comprehensive review following systematic review methodology"
+    target_audience: "professional"
+    
+    objectives:
+      - "Conduct systematic literature synthesis following PRISMA guidelines"
+      - "Include 30+ high-quality sources with systematic selection criteria"
+      - "Provide explicit inclusion and exclusion criteria with rationale"
+      - "Present comprehensive evidence mapping and quality assessment"
+      - "Identify gaps, controversies, and future research directions"
+      - "Synthesize findings using appropriate analytical framework"
+    
+    constraints:
+      - "PRISMA compliance for systematic methodology"
+      - "Transparent search strategy and selection process"
+      - "Quality assessment of included studies using standard tools"
+      - "Evidence synthesis with risk of bias considerations"
+      - "Clear recommendations based on evidence strength"
+    
+    sources_policy:
+      min_sources: 30
+      verification_required: true
+      peer_reviewed_minimum: 25
+      systematic_search: true
+      database_sources: ["PubMed", "Scholar", "Cochrane", "Embase"]
+      search_strategy_documented: true
+    
+    quality_metrics:
+      coherence_threshold: 0.9
+      citation_count_min: 30
+      evidence_coverage_threshold: 0.9
+      originality_threshold: 0.8
+      accuracy_threshold: 0.95
+    
+    output_contract:
+      format_type: "markdown"
+      sections:
+        - "Abstract"
+        - "Introduction"
+        - "Methods"
+        - "Results"
+        - "Discussion"
+        - "Conclusion"
+        - "References"
+        - "PRISMA Checklist"
+      required_fields: ["methods", "prisma_flow", "references"]
+
+  # Case study analysis
+  case_study:
+    id: "case_study"
+    name: "Case Study Analysis"
+    description: "In-depth case study analysis with theoretical framework application"
+    target_audience: "professional"
+    
+    objectives:
+      - "Provide comprehensive case analysis using established frameworks"
+      - "Connect empirical observations to theoretical foundations"
+      - "Include relevant contextual factors and background information"
+      - "Apply analytical tools appropriate to the case domain"
+      - "Generate actionable insights and recommendations"
+      - "Discuss generalizability and transfer potential"
+    
+    constraints:
+      - "Maintain confidentiality and anonymize sensitive information"
+      - "Use appropriate analytical frameworks for the domain"
+      - "Support claims with evidence from case data and literature"
+      - "Address limitations of single-case methodology"
+      - "Include practical implications and recommendations"
+    
+    sources_policy:
+      min_sources: 10
+      verification_required: true
+      case_specific_sources: true
+      theoretical_framework_sources: 5
+      contextual_sources: 5
+    
+    output_contract:
+      format_type: "markdown"
+      sections:
+        - "Executive Summary"
+        - "Case Background"
+        - "Theoretical Framework"
+        - "Analysis"
+        - "Findings"
+        - "Recommendations"
+        - "Limitations"
+        - "References"
+      required_fields: ["background", "framework", "analysis", "recommendations"]
+
+  # Methodology section writing
+  methodology_writer:
+    id: "methodology_writer"
+    name: "Research Methodology Specialist"
+    description: "Specialized methodology section writing with replication focus"
+    target_audience: "academic"
+    
+    objectives:
+      - "Create comprehensive methodology section enabling replication"
+      - "Provide detailed procedures, materials, and analytical approaches"
+      - "Include appropriate ethical considerations and approvals"
+      - "Specify data collection, processing, and analysis methods"
+      - "Address validity, reliability, and potential limitations"
+      - "Reference established methodological frameworks and standards"
+    
+    constraints:
+      - "Sufficient detail for independent replication"
+      - "Appropriate methodology for research questions and design"
+      - "Ethical compliance and institutional review considerations"
+      - "Statistical power and sample size justifications"
+      - "Bias mitigation and quality control measures"
+    
+    output_contract:
+      format_type: "markdown"
+      sections:
+        - "Research Design"
+        - "Participants/Materials"
+        - "Procedures"
+        - "Data Analysis"
+        - "Ethical Considerations"
+        - "Limitations"
+      required_fields: ["design", "procedures", "analysis"]
+
+  # Literature review generation
+  literature_review:
+    id: "literature_review"
+    name: "Literature Review Synthesizer"
+    description: "Comprehensive literature review with gap analysis and synthesis"
+    target_audience: "academic"
+    
+    objectives:
+      - "Synthesize current state-of-the-art in specified research domain"
+      - "Identify gaps, contradictions, and emerging themes in literature"
+      - "Provide chronological and thematic organization of findings"
+      - "Generate evidence-based conclusions about field status"
+      - "Suggest future research directions based on identified gaps"
+      - "Create structured citation map with relationship analysis"
+    
+    sources_policy:
+      min_sources: 25
+      verification_required: true
+      peer_reviewed_minimum: 20
+      systematic_search: true
+      database_sources: ["Scholar", "PubMed", "CrossRef", "ArXiv"]
+    
+    output_contract:
+      format_type: "markdown"
+      sections:
+        - "Introduction"
+        - "Search Strategy"
+        - "Thematic Analysis"
+        - "Chronological Development"
+        - "Gaps and Controversies"
+        - "Future Directions"
+        - "Conclusion"
+        - "References"
+      required_fields: ["search_strategy", "thematic_analysis", "gaps"]
+
+  # Presentation slide generation
+  slide_generator:
+    id: "slide_generator"
+    name: "Academic Presentation Generator"
+    description: "Executive-level presentation with academic citations and speaker notes"
+    target_audience: "professional"
+    
+    objectives:
+      - "Create clear, engaging presentation following story arc structure"
+      - "Include 10-15 slides with logical flow and transitions"
+      - "Provide comprehensive speaker notes with citations"
+      - "Balance text, visuals, and white space for readability"
+      - "Include key takeaways and actionable insights"
+      - "Maintain academic credibility with proper attribution"
+    
+    constraints:
+      - "Slide content concise with bullet points and key phrases"
+      - "Speaker notes detailed with full explanations and citations"
+      - "Visual hierarchy and consistent formatting throughout"
+      - "Appropriate academic tone for target audience"
+      - "Time allocation considerations for presentation delivery"
+    
+    output_contract:
+      format_type: "json"
+      json_schema:
+        type: "array"
+        items:
+          type: "object"
+          properties:
+            slide_number: {"type": "integer"}
+            title: {"type": "string"}
+            content: {"type": "array", "items": {"type": "string"}}
+            speaker_notes: {"type": "string"}
+            citations: {"type": "array", "items": {"type": "string"}}
+            estimated_time: {"type": "string"}
+      required_fields: ["slides", "speaker_notes", "citations"]
+
+  # Coding assistance (optional)
+  coding_helper:
+    id: "coding_helper"
+    name: "Academic Code Assistant"
+    description: "Research code development with documentation and testing"
+    target_audience: "academic"
+    
+    objectives:
+      - "Produce well-structured, documented research code"
+      - "Include comprehensive testing and validation procedures"
+      - "Provide clear explanations of algorithmic design choices"
+      - "Ensure reproducibility and version control best practices"
+      - "Include appropriate statistical or computational validation"
+      - "Maintain security best practices and avoid secrets exposure"
+    
+    constraints:
+      - "Code must be production-ready with error handling"
+      - "Documentation suitable for academic publication supplements"
+      - "No hardcoded credentials or sensitive information"
+      - "Include appropriate licensing and attribution"
+      - "Follow domain-specific coding standards and conventions"
+    
+    output_contract:
+      format_type: "markdown"
+      sections:
+        - "Code Overview"
+        - "Implementation"
+        - "Testing Framework"
+        - "Documentation"
+        - "Usage Examples"
+        - "Dependencies"
+      required_fields: ["implementation", "tests", "documentation"]

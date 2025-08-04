@@ -68,21 +68,17 @@ from pydantic import BaseModel
 from src.agent.handywriterz_state import HandyWriterzState
 from src.agent.base import UserParams
 
-# Import simple system through organized module structure
-try:
-    # Correctly import from the top-level src directory
-    from src.agent.graph import graph as simple_graph
-    from src.agent.state import OverallState as SimpleState
-    SIMPLE_SYSTEM_AVAILABLE = True
-    logger.info("✅ Simple Gemini system imported successfully")
-except ImportError as e:
-    SIMPLE_SYSTEM_AVAILABLE = False
-    logger.warning(f"⚠️  Simple Gemini system not available: {e}")
-    simple_graph = None
-    SimpleState = None
+# Simple system removed - all requests use advanced HandyWriterz system
+SIMPLE_SYSTEM_AVAILABLE = False
+logger.info("✅ Simple system permanently disabled - using advanced system only")
 
-# Import routing system
-from src.agent.routing.unified_processor import UnifiedProcessor
+# Import routing system (prefer the in-package unified processor; fallback to top-level module)
+try:
+    from src.agent.routing.unified_processor import UnifiedProcessor
+except ImportError:
+    # Fallback for environments where routing is located at backend/src/unified_processor.py
+    from src.unified_processor import UnifiedProcessor  # type: ignore
+
 from src.db.database import (
     get_user_repository, get_conversation_repository,
     get_document_repository, db_manager
@@ -104,6 +100,7 @@ from src.services.security_service import (
 from src.models.registry import initialize_registry, get_registry
 from src.services.budget import get_budget_guard
 from src.services.logging_context import setup_correlation_logging
+from src.services.feature_validator import get_feature_validator
 from src.middleware.error_middleware import (
     error_middleware, global_exception_handler
 )
@@ -112,12 +109,34 @@ from src.middleware.security_middleware import (
 )
 from scripts import init_database
 
+# Initialize model registry with strict mode in production
+try:
+    strict_mode = os.getenv("FEATURE_REGISTRY_ENFORCED", "false").lower() == "true"
+    registry_config_path = "src/config/model_config.yaml"
+    pricing_config_path = "src/config/price_table.json"
+    
+    initialize_registry(
+        model_config_path=registry_config_path,
+        price_table_path=pricing_config_path,
+        strict=strict_mode
+    )
+    
+    logger.info(f"✅ ModelRegistry initialized (strict_mode: {strict_mode})")
+    
+except Exception as e:
+    if os.getenv("FEATURE_REGISTRY_ENFORCED", "false").lower() == "true":
+        logger.error(f"❌ ModelRegistry required but failed to initialize: {e}")
+        raise RuntimeError(f"Production requires valid ModelRegistry: {e}")
+    else:
+        logger.warning(f"⚠️  ModelRegistry initialization failed (non-strict mode): {e}")
+
 # Async Redis client for SSE
+# Normalize ALLOWED_ORIGINS and other env from .env.* files; keep defaults safe
 redis_client = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"), decode_responses=True)
 
 
 # Initialize unified processor
-unified_processor = UnifiedProcessor(SIMPLE_SYSTEM_AVAILABLE, True)
+unified_processor = UnifiedProcessor(simple_available=False, advanced_available=True)
 
 
 from src.db.models import Base
@@ -266,16 +285,37 @@ app.add_middleware(csrf_middleware)
 # Add Error Handling Middleware
 app.add_middleware(error_middleware)
 
-# Add CORS middleware
+# Add CORS middleware (parse ALLOWED_ORIGINS from env; supports comma/semicolon/json)
+def _parse_allowed_origins() -> list[str]:
+    raw = os.getenv("ALLOWED_ORIGINS", "")
+    if not raw:
+        return [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://localhost:5173",
+            "https://handywriterz.vercel.app",
+        ]
+    raw = raw.strip()
+    # Try JSON array first
+    if raw.startswith("["):
+        try:
+            arr = json.loads(raw)
+            return [str(x).strip() for x in arr if str(x).strip()]
+        except Exception:
+            pass
+    # Fallback to split by comma or semicolon
+    parts = []
+    for sep in [",", ";"]:
+        if sep in raw:
+            parts = [p.strip() for p in raw.split(sep)]
+            break
+    if not parts:
+        parts = [raw.strip()]
+    return [p for p in parts if p]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:5173",  # SvelteKit dev server
-        "https://handywriterz.vercel.app",  # Production frontend
-        "https://*.handywriterz.com"  # Custom domains
-    ],
+    allow_origins=_parse_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -305,13 +345,20 @@ app.include_router(usage_router, prefix="/api")
 
 
 # Include payment system routes
-from src.api.payments import router as payments_router
-from src.api.payout import router as payout_router
+# Payments and payout routes are guarded due to model mismatches with WalletEscrow schema.
+# Enable via FEATURE_PAYMENTS_ENABLED=true when models are aligned.
 from src.api.checker import router as checker_router
-
-app.include_router(payments_router)
-app.include_router(payout_router)
 app.include_router(checker_router)
+
+if os.getenv("FEATURE_PAYMENTS_ENABLED", "false").lower() == "true":
+    try:
+        from src.api.payments import router as payments_router
+        from src.api.payout import router as payout_router
+        app.include_router(payments_router)
+        app.include_router(payout_router)
+        logger.info("✅ Payments routes enabled by FEATURE_PAYMENTS_ENABLED")
+    except Exception as e:
+        logger.warning(f"⚠️ Payments routes disabled due to import/runtime error: {e}")
 
 # Include Workbench routes
 from src.api.workbench import router as workbench_router
@@ -397,7 +444,7 @@ async def unified_system_status():
         routing_stats = unified_processor.router.get_routing_stats()
 
         # Test system availability
-        simple_status = "available" if SIMPLE_SYSTEM_AVAILABLE else "unavailable"
+        simple_status = "permanently_disabled"
         advanced_status = "available"  # HandyWriterz is always available in this context
 
         # Get Redis status
@@ -537,13 +584,14 @@ async def unified_system_status():
             # API endpoints
             "endpoints": {
                 "unified_chat": "/api/chat",
-                "simple_chat": "/api/chat/simple",
+                "simple_chat": "removed - use /api/chat",
                 "advanced_chat": "/api/chat/advanced",
                 "academic_writing": "/api/write",
                 "file_upload": "/api/upload",
                 "streaming": "/api/stream/{conversation_id}",
                 "documentation": "/docs",
-                "workbench": "/api/workbench" # New endpoint
+                "workbench": "/api/workbench", # New endpoint
+                "feature_status": "/api/features/status"
             },
 
             # Performance metrics
@@ -567,6 +615,170 @@ async def unified_system_status():
                 "advanced_handywriterz": {"status": "unknown"}
             }
         }
+
+
+# Feature Status Endpoint for Disabled Services
+@app.get("/api/features/status")
+@with_error_handling(ErrorCategory.SYSTEM, ErrorSeverity.LOW)
+async def get_features_status():
+    """
+    🔧 Feature Status Endpoint
+    Returns structured information about disabled/enabled features with reasons and alternatives.
+    """
+    try:
+        validator = get_feature_validator()
+        return {
+            "status": "success",
+            "timestamp": time.time(),
+            "features": validator.get_all_features_status()
+        }
+    except Exception as e:
+        logger.error(f"Features status check failed: {e}")
+        return {
+            "status": "error",
+            "timestamp": time.time(),
+            "error": str(e),
+            "features": {}
+        }
+
+
+# Admin Metrics Endpoint for Usage Tracking
+@app.get("/api/admin/metrics")
+@require_authorization("admin")
+@with_error_handling(ErrorCategory.SYSTEM, ErrorSeverity.LOW)
+async def get_admin_metrics(
+    tenant: Optional[str] = None,
+    include_models: bool = True,
+    include_providers: bool = True,
+    time_window: str = "24h"
+):
+    """
+    📊 Admin Metrics Endpoint
+    Returns comprehensive usage metrics for administrators including costs, tokens, and performance.
+    """
+    try:
+        # Get budget guard with Redis metrics
+        budget_guard = get_budget_guard()
+        
+        # Base metrics structure
+        metrics = {
+            "timestamp": time.time(),
+            "time_window": time_window,
+            "tenant": tenant or "all",
+            "summary": {},
+            "usage": {},
+            "costs": {},
+            "performance": {},
+            "providers": {},
+            "models": {}
+        }
+        
+        # Get usage summary from Redis-backed budget guard
+        if tenant:
+            usage_summary = budget_guard.get_usage_summary(tenant)
+            metrics["usage"] = usage_summary
+            metrics["summary"] = {
+                "total_requests": usage_summary.get("total_requests", 0),
+                "total_tokens": usage_summary.get("total_tokens", 0),
+                "total_cost": usage_summary.get("total_cost", 0.0),
+                "daily_spent": usage_summary.get("daily_spent", 0.0),
+                "hourly_spent": usage_summary.get("hourly_spent", 0.0),
+                "monthly_spent": usage_summary.get("monthly_spent", 0.0),
+                "data_source": usage_summary.get("data_source", "unknown")
+            }
+        else:
+            # Aggregate metrics for all tenants (would need Redis SCAN in production)
+            metrics["summary"] = {
+                "note": "Tenant-specific metrics available with ?tenant=<tenant_id>",
+                "total_requests": "aggregation_not_implemented",
+                "total_tokens": "aggregation_not_implemented", 
+                "total_cost": "aggregation_not_implemented"
+            }
+        
+        # Provider performance metrics
+        if include_providers:
+            try:
+                factory = get_factory()
+                providers = factory.list_providers()
+                
+                for provider_name in providers:
+                    provider = factory.get_provider(provider_name)
+                    if provider:
+                        metrics["providers"][provider_name] = {
+                            "status": "available",
+                            "default_model": getattr(provider, 'get_default_model', lambda: 'unknown')(),
+                            "provider_type": provider.__class__.__name__
+                        }
+                        
+            except Exception as e:
+                logger.warning(f"Failed to get provider metrics: {e}")
+                metrics["providers"] = {"error": str(e)}
+        
+        # Model registry metrics
+        if include_models:
+            try:
+                registry = get_registry()
+                if registry._loaded:
+                    all_models = registry.get_all_models()
+                    metrics["models"] = {
+                        "total_models": len(all_models),
+                        "models_by_provider": {},
+                        "registry_status": "loaded"
+                    }
+                    
+                    # Group models by provider
+                    for model_id, model_info in all_models.items():
+                        provider = model_info.provider
+                        if provider not in metrics["models"]["models_by_provider"]:
+                            metrics["models"]["models_by_provider"][provider] = []
+                        metrics["models"]["models_by_provider"][provider].append({
+                            "logical_id": model_id,
+                            "actual_model": model_info.model_id,
+                            "has_pricing": model_info.pricing is not None
+                        })
+                else:
+                    metrics["models"] = {"registry_status": "not_loaded"}
+                    
+            except Exception as e:
+                logger.warning(f"Failed to get model metrics: {e}")
+                metrics["models"] = {"error": str(e)}
+        
+        # System performance metrics
+        metrics["performance"] = {
+            "simple_system_available": False,  # Removed
+            "advanced_system_available": True,
+            "redis_status": "unknown",
+            "database_status": "unknown"
+        }
+        
+        # Test Redis connection
+        try:
+            await redis_client.ping()
+            metrics["performance"]["redis_status"] = "healthy"
+        except Exception:
+            metrics["performance"]["redis_status"] = "unhealthy"
+        
+        # Test database connection
+        try:
+            if db_manager.health_check():
+                metrics["performance"]["database_status"] = "healthy"
+            else:
+                metrics["performance"]["database_status"] = "unhealthy"
+        except Exception:
+            metrics["performance"]["database_status"] = "error"
+        
+        return metrics
+        
+    except Exception as e:
+        logger.error(f"Admin metrics failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "metrics_collection_failed",
+                "message": str(e),
+                "timestamp": time.time()
+            }
+        )
 
 
 # Multi-Provider AI System Status Endpoint
@@ -1106,48 +1318,12 @@ async def unified_chat_endpoint(
 
 # Quick chat endpoint for simple queries (explicit routing)
 @app.post("/api/chat/simple")
-@require_rate_limit("chat_request")
-@validate_input()
-@with_error_handling(ErrorCategory.AGENT_FAILURE, ErrorSeverity.MEDIUM)
-async def simple_chat_endpoint(
-    message: str = Form(...),
-    files: Optional[List[UploadFile]] = File(None)
-):
-    """
-    Simple chat endpoint - forces routing to Gemini system for quick responses.
-    Use this for fast, lightweight queries.
-    """
-    if not SIMPLE_SYSTEM_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="Simple system not available. Use /api/chat for automatic routing."
-        )
-
-    try:
-        # Process files
-        processed_files = []
-        if files:
-            for file in files:
-                content = await file.read()
-                processed_files.append({
-                    "filename": file.filename,
-                    "content": content.decode('utf-8', errors='ignore') if file.content_type and file.content_type.startswith("text") else content
-                })
-
-        # Force simple processing
-        result = await unified_processor._process_simple(message, processed_files)
-
-        return {
-            "success": True,
-            "response": result.get("response", ""),
-            "sources": result.get("sources", []),
-            "system_used": "simple_forced",
-            "processing_time": 0.0  # Would need to time this
-        }
-
-    except Exception as e:
-        logger.error(f"Simple chat endpoint error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+async def simple_chat_endpoint_removed():
+    """Simple chat endpoint removed - use /api/chat which routes to advanced system."""
+    raise HTTPException(
+        status_code=410,
+        detail="Simple chat system has been removed. Please use /api/chat endpoint which provides superior academic writing capabilities."
+    )
 
 
 # Advanced chat endpoint for academic writing (explicit routing)
@@ -2142,6 +2318,9 @@ async def execute_writing_workflow(conversation_id: str, initial_state: HandyWri
         workflow_start_time = time.time()
         chunk_count = 0
 
+        # Import the graph lazily to avoid import-order issues during startup
+        from src.agent.handywriterz_graph import handywriterz_graph
+
         # Execute the LangGraph workflow with circuit breaker
         async for chunk in handywriterz_graph.astream(initial_state, config):
             chunk_count += 1
@@ -2177,7 +2356,7 @@ async def execute_writing_workflow(conversation_id: str, initial_state: HandyWri
                     "status": "completed",
                     "duration_seconds": workflow_duration,
                     "chunks_processed": chunk_count,
-                    "completion_message": "✅ Academic document generated successfully! (Demo mode)"
+                    "completion_message": "Academic document generated successfully."
                 }
             })
         )

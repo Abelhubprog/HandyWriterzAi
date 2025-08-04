@@ -15,6 +15,9 @@ from langchain_core.runnables import RunnableConfig
 
 from src.agent.base import BaseNode, NodeError
 from ...agent.handywriterz_state import HandyWriterzState
+from .error_handling import (
+    with_error_handling, RetryConfig, ErrorCategory, NodeErrorHandler
+)
 
 
 @dataclass
@@ -94,9 +97,20 @@ class PerplexitySearchAgent(BaseNode):
             self.logger.error(f"Perplexity client initialization failed: {e}")
             self.http_client = None
     
+    @with_error_handling(
+        node_name="PerplexitySearch",
+        retry_config=RetryConfig(
+            max_attempts=3,
+            base_delay=2.0,
+            max_delay=30.0,
+            retry_on_exceptions=(httpx.RequestError, httpx.TimeoutException, ConnectionError)
+        ),
+        error_category=ErrorCategory.EXTERNAL_SERVICE,
+        use_circuit_breaker=True
+    )
     async def execute(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """
-        Execute comprehensive Perplexity-powered academic search.
+        Execute comprehensive Perplexity-powered academic search with production error handling.
         
         This method performs real-time academic research using Perplexity's
         advanced search capabilities for up-to-date, credible sources.

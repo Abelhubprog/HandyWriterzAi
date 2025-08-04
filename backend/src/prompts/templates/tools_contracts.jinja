@@ -1,0 +1,147 @@
+# Tools & Workflow Instructions
+
+## Available Agent Tools
+You have access to the following specialized agents that work in coordinated sequence:
+
+### 1. Planning Agent
+**Purpose**: Structure approach and define deliverables
+**Input format**: Research questions and scope parameters
+**Usage**: Always start with planning phase to establish methodology
+```json
+{
+  "tool": "planner",
+  "research_questions": ["Q1", "Q2", "Q3"],
+  "sections": ["Section1", "Section2"],
+  "constraints": {"word_count": {{ word_count_target }}, "citations": {{ quality_metrics.citation_count_min }}}
+}
+```
+
+### 2. Research Agents (Multi-Provider)
+**Purpose**: Gather and verify scholarly sources and evidence
+**Providers available**: {{ model_hints.researcher|join(", ") }}
+**Input format**: Structured search queries with field specifications
+```json
+{
+  "tool": "search",
+  "queries": ["specific search terms", "domain specific query"],
+  "k": {{ quality_metrics.citation_count_min or 10 }},
+  "field": "{{ use_case }}",
+  "databases": ["Scholar", "PubMed", "CrossRef", "ArXiv"],
+  "filters": {
+    "peer_reviewed": {{ sources_policy.verification_required|default(true) }},
+    "recency": "{{ sources_policy.recency_preference|default('within_5_years') }}"
+  }
+}
+```
+
+### 3. Source Verification Agent  
+**Purpose**: Validate source credibility and accessibility
+**Quality thresholds**: Coherence ≥ {{ quality_metrics.coherence_threshold }}, Accuracy ≥ {{ quality_metrics.accuracy_threshold }}
+```json
+{
+  "tool": "verify_sources",
+  "sources": [{"title": "...", "authors": "...", "doi": "...", "url": "..."}],
+  "verification_criteria": {
+    "peer_review_status": true,
+    "institutional_credibility": true,
+    "citation_accuracy": true
+  }
+}
+```
+
+### 4. Evidence Mapping Agent
+**Purpose**: Organize and synthesize verified evidence
+**Coverage target**: ≥ {{ quality_metrics.evidence_coverage_threshold }}
+```json
+{
+  "tool": "evidence_mapper",
+  "verified_sources": [...],
+  "synthesis_framework": "thematic|chronological|methodological",
+  "gap_analysis": true
+}
+```
+
+### 5. Writing Agent
+**Purpose**: Generate content adhering to output contract
+**Model preference**: {{ model_hints.writer }}
+**Temperature range**: {{ model_hints.temperature_range[0] }}-{{ model_hints.temperature_range[1] }}
+```json
+{
+  "tool": "writer",
+  "section": "introduction|methodology|results|discussion",
+  "evidence_base": [...],
+  "style_guide": {
+    "citation_style": "{{ citation_style }}",
+    "academic_level": "{{ academic_level }}",
+    "tone": "academic_professional"
+  },
+  "constraints": {
+    "word_count": {{ word_count_target }},
+    "inline_citations": true
+  }
+}
+```
+
+### 6. Quality Evaluation Agent
+**Purpose**: Assess output quality and recommend improvements
+**Evaluation criteria**: Coherence, accuracy, originality, citation coverage
+```json
+{
+  "tool": "evaluator",
+  "content": "...",
+  "evaluation_metrics": {
+    "coherence_threshold": {{ quality_metrics.coherence_threshold }},
+    "originality_threshold": {{ quality_metrics.originality_threshold }},
+    "citation_density": {{ quality_metrics.citation_count_min }},
+    "evidence_coverage": {{ quality_metrics.evidence_coverage_threshold }}
+  },
+  "improvement_suggestions": true
+}
+```
+
+## Workflow Execution Sequence
+{% if use_case == "general" %}
+**General Workflow**:
+1. **Plan** → Outline approach and confirm with user if needed
+2. **Search** → Gather relevant information (if required)
+3. **Write** → Generate structured response
+4. **Review** → Validate quality and completeness
+{% elif use_case in ["dissertation", "thesis"] %}
+**Academic Writing Workflow**:
+1. **Plan** → Define sections, research questions, and methodology
+2. **Research** → Multi-agent search across academic databases
+3. **Verify** → Filter sources for credibility and relevance  
+4. **Map** → Synthesize evidence and identify gaps
+5. **Write** → Section-by-section generation with inline citations
+6. **Evaluate** → Quality assessment and iterative improvement
+7. **Finalize** → Format checking and reference compilation
+{% elif use_case == "review_article" %}
+**Systematic Review Workflow**:
+1. **Plan** → Define search strategy and inclusion/exclusion criteria
+2. **Search** → Systematic database searches with documented methodology
+3. **Screen** → Apply inclusion/exclusion criteria systematically
+4. **Extract** → Extract key data and assess study quality
+5. **Synthesize** → Thematic or quantitative synthesis of findings
+6. **Write** → Structure according to PRISMA guidelines
+7. **Evaluate** → Quality assessment and bias evaluation
+{% else %}
+**Standard Research Workflow**:
+1. **Plan** → Structure approach and define deliverables
+2. **Research** → Targeted search for domain-specific sources
+3. **Verify** → Source validation and credibility assessment
+4. **Write** → Content generation with evidence integration
+5. **Evaluate** → Quality review and refinement
+{% endif %}
+
+## Error Handling & Fallbacks
+- **Source unavailability**: Switch to alternative databases or grey literature
+- **Quality threshold failures**: Trigger additional search iterations or methodology adjustment
+- **Budget constraints**: Prioritize high-impact sources and reduce retrieval depth
+- **Time limitations**: Focus on core sections and provide staged delivery plan
+
+## Output Quality Assurance
+All tools must maintain:
+- **Traceability**: Clear connection between claims and sources
+- **Reproducibility**: Documented methodology enabling replication
+- **Transparency**: Open acknowledgment of limitations and assumptions
+- **Compliance**: Adherence to academic integrity and ethical standards

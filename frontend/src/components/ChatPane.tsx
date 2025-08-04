@@ -3,9 +3,13 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Composer } from './Composer/Composer';
 import { MessageBubble } from './MessageBubble';
-import { useChatStream } from '@/lib/useChatStream';
 import { cn } from '@/lib/utils';
 import { useActiveConversation, useStreamingState, useChatActions } from '@/store/useChatStore';
+import { useStream } from '@/hooks/useStream';
+import { apiClient } from '@/services/advancedApiClient';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { Clock, Brain, Search, FileText, CheckCircle } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -28,11 +32,8 @@ interface ChatPaneProps {
 }
 
 export function ChatPane({ conversationId, className, onConversationCreate }: ChatPaneProps) {
-  // useActiveConversation returns a conversation object or undefined
   const activeConversation = useActiveConversation();
-  // useStreamingState returns the streaming state object
   const streamingState = useStreamingState();
-  // useChatActions returns an object with all action functions
   const {
     createConversation,
     selectConversation,
@@ -60,52 +61,79 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
       selectConversation(conversationId);
     }
   }, [conversationId, selectConversation]);
+
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { isStreaming, startStream, stopStream } = useChatStream();
 
-  const startSSEStream = useCallback((traceId: string) => {
-    const eventSource = new EventSource(`/api/stream/${traceId}`);
-    
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'workflow_progress') {
-          updateAgentStatus(data.data.current_node || 'Processing...');
-          if (data.data.response) {
-            updateStreamingMessage(data.data.response);
-          }
-        } else if (data.type === 'workflow_complete') {
+  // Use unified stream hook against Next proxy /api/chat/stream/[traceId]
+  const [traceId, setTraceId] = useState<string | null>(null);
+  const stream = useStream(traceId, {
+    onMessage: (evt) => {
+      // Map new step-wise schema into store-friendly messages
+      switch (evt.type) {
+        case 'planning_started':
+          updateAgentStatus('Planning the approach...');
+          break;
+        case 'search_started':
+        case 'search_progress':
+          updateAgentStatus('Searching sources...');
+          break;
+        case 'verify_started':
+          updateAgentStatus('Verifying sources...');
+          break;
+        case 'writer_started':
+          updateAgentStatus('Composing...');
+          break;
+        case 'token':
+        case 'content':
+          if (evt.delta) updateStreamingMessage((streamingState.streamingMessage || '') + evt.delta);
+          if (evt.text) updateStreamingMessage((streamingState.streamingMessage || '') + evt.text);
+          break;
+        case 'evaluator_started':
+          updateAgentStatus('Evaluating...');
+          break;
+        case 'formatter_started':
+          updateAgentStatus('Formatting...');
+          break;
+        case 'workflow_finished':
+        case 'done':
           stopStreaming();
-          eventSource.close();
-        } else if (data.type === 'workflow_failed') {
-          updateAgentStatus('Error occurred');
-          stopStreaming();
-          eventSource.close();
-        }
-      } catch (e) {
-        console.error('SSE parsing error:', e);
+          break;
+        default:
+          // keep timeline via useStream internal store
+          break;
       }
-    };
-
-    eventSource.onerror = (error) => {
-      console.error('SSE error:', error);
-      eventSource.close();
+    },
+    onClose: () => {
       stopStreaming();
-    };
-
-    return eventSource;
-  }, [updateAgentStatus, updateStreamingMessage, stopStreaming]);
+    }
+  });
 
   // Auto-scroll to bottom when new messages arrive or streaming updates
   useEffect(() => {
     scrollToBottom();
   }, [activeConversation?.messages, streamingState.streamingMessage]);
 
-  // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  // Helper function to calculate progress based on agent status
+  const getProgressValue = useCallback((status: string | undefined): number => {
+    if (!status) return 0;
+    
+    const statusMap: Record<string, number> = {
+      'Processing request...': 10,
+      'Planning the approach...': 20,
+      'Searching sources...': 40,
+      'Verifying sources...': 60,
+      'Composing...': 80,
+      'Evaluating...': 90,
+      'Formatting...': 95,
+      'Completed': 100
+    };
+    
+    return statusMap[status] || 15;
   }, []);
 
   const handleSend = useCallback(async (payload: {
@@ -120,20 +148,14 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
       size: number;
     }>;
   }) => {
-    console.log('Send button clicked with payload:', payload);
-    
-    // Prevent sending if already streaming
     if (streamingState.isStreaming) {
-      console.log('Already streaming, preventing send');
       return;
     }
 
     try {
-      // Create conversation if we don't have an active one or it's empty/invalid
       let currentConversationId = payload.conversationId;
-      
+
       if (!activeConversation || !currentConversationId) {
-        // Create a new conversation with the first message
         currentConversationId = createConversation({
           role: 'user',
           content: payload.content,
@@ -142,7 +164,6 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
         });
         selectConversation(currentConversationId);
       } else {
-        // Add user message to existing conversation
         addMessage({
           conversationId: currentConversationId,
           role: 'user',
@@ -152,86 +173,112 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
         });
       }
 
-      // Start streaming
-      const traceId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      // Start streaming and clear previous stream text
+      const newTraceId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? crypto.randomUUID()
         : Math.random().toString(36).slice(2));
-      startStreaming(traceId);
+      startStreaming(newTraceId);
+      setTraceId(newTraceId);
       updateAgentStatus('Processing request...');
+      updateStreamingMessage(''); // reset buffer
 
-      // Send to correct backend endpoint  
       const requestBody = {
         prompt: payload.content,
         mode: payload.writeupType || "general",
         file_ids: payload.attachments?.map(a => a.url) || [],
-        user_params: { writeupType: payload.writeupType }
+        user_params: { 
+          writeupType: payload.writeupType,
+          citationStyle: 'Harvard',
+          wordCount: 3000,
+          model: 'gemini-2.0-flash-exp',
+          user_id: 'current_user'
+        }
       };
-      
-      console.log('Sending API request to /api/chat:', requestBody);
-      
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
+
+      // Use AdvancedApiClient to call backend directly
+      const { data: result } = await apiClient.chat(requestBody);
+
+      // Add assistant message placeholder; final text will be appended as stream
+      addMessage({
+        conversationId: currentConversationId,
+        role: 'assistant',
+        content: '', // Will be populated by streaming
       });
 
-      console.log('API response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API Error:', response.status, errorText);
-        throw new Error(`API Error: ${response.status} - ${errorText}`);
-      }
-
-      const result = await response.json();
-      console.log('API response result:', result);
+      // Update trace ID for streaming
+      const streamTraceId = result.trace_id || result.conversation_id || newTraceId;
+      setTraceId(streamTraceId);
       
-      // Handle the response
-      if (result.success !== false) {
-        // Add final assistant message
-        addMessage({
-          conversationId: currentConversationId,
-          role: 'assistant',
-          content: result.response || 'I received your message and processed it successfully.',
-        });
-      } else {
-        throw new Error(result.response || 'Unknown error occurred');
-      }
+      // Start SSE streaming from backend
+      apiClient.streamResponse(`/api/stream/${streamTraceId}`, { method: 'GET' }, (chunk) => {
+        console.log('SSE chunk received:', chunk);
+        
+        // Handle different event types
+        switch (chunk.type) {
+          case 'planning_started':
+            updateAgentStatus('Planning the approach...');
+            break;
+          case 'search_started':
+          case 'search_progress':
+            updateAgentStatus('Searching sources...');
+            break;
+          case 'verify_started':
+            updateAgentStatus('Verifying sources...');
+            break;
+          case 'writer_started':
+            updateAgentStatus('Composing...');
+            break;
+          case 'token':
+            if (chunk.delta) {
+              updateStreamingMessage((streamingState.streamingMessage || '') + chunk.delta);
+            }
+            break;
+          case 'evaluator_started':
+            updateAgentStatus('Evaluating...');
+            break;
+          case 'formatter_started':
+            updateAgentStatus('Formatting...');
+            break;
+          case 'workflow_finished':
+          case 'done':
+            stopStreaming();
+            break;
+          case 'error':
+            console.error('SSE error:', chunk.error);
+            setError(chunk.error || 'Unknown streaming error');
+            stopStreaming();
+            break;
+        }
+      }).catch(error => {
+        console.error('SSE streaming error:', error);
+        setError(error.message || 'Streaming connection failed');
+        stopStreaming();
+      });
+      // Do not stopStreaming here; the hook will close on workflow_finished
 
-      // Start SSE stream for real-time updates if trace_id is available
-      if (result.trace_id) {
-        startSSEStream(result.trace_id);
-      }
-
-      stopStreaming();
-
-      // Notify parent if new conversation
       if (!conversationId) {
         onConversationCreate?.(currentConversationId);
       }
-
     } catch (error) {
       console.error('Failed to send message:', error);
       stopStreaming();
     }
   }, [
     streamingState.isStreaming,
-    streamingState.streamingMessage,
     addMessage,
     startStreaming,
     updateStreamingMessage,
     updateAgentStatus,
     stopStreaming,
-    startStream,
     conversationId,
     onConversationCreate,
+    activeConversation,
+    createConversation,
+    selectConversation
   ]);
 
   return (
     <div className={cn("h-full flex flex-col", className)}>
-      {/* Centered chat interface like ChatGPT */}
       <div className="flex-1 flex items-center justify-center px-4 overflow-hidden">
         <div className="w-full max-w-4xl h-full flex flex-col">
           {!activeConversation?.messages || activeConversation.messages.length === 0 ? (
@@ -252,8 +299,25 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
             </div>
           ) : (
             <>
+              {/* Progress Indicator - shows when streaming */}
+              {streamingState.isStreaming && (
+                <div className="mb-4 p-4 bg-card border border-border rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Brain className="h-4 w-4 text-primary animate-pulse" />
+                    <span className="text-sm font-medium">
+                      {streamingState.agentStatus || 'Processing request...'}
+                    </span>
+                  </div>
+                  <Progress value={getProgressValue(streamingState.agentStatus)} className="h-2" />
+                  <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                    <Clock className="h-3 w-3" />
+                    <span>Generating your content...</span>
+                  </div>
+                </div>
+              )}
+              
               <div className="flex-1 overflow-hidden">
-                <div 
+                <div
                   ref={scrollAreaRef}
                   className="h-full overflow-y-auto pr-4"
                   style={{ scrollbarGutter: 'stable' }}
@@ -274,8 +338,8 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
                       />
                     ))}
 
-                    {/* Show streaming message */}
-                    {streamingState.isStreaming && streamingState.streamingMessage && (
+                    {/* Show streaming message buffer from store */}
+                    {streamingState.isStreaming && (streamingState.streamingMessage?.length > 0) && (
                       <MessageBubble
                         message={{
                           id: 'streaming',
@@ -288,10 +352,10 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
                     )}
 
                     {/* Show agent status */}
-                    {streamingState.isStreaming && streamingState.agentStatus && (
+                    {streamingState.isStreaming && (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground px-4">
                         <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                        <span>{streamingState.agentStatus}</span>
+                        <span>{streamingState.agentStatus || 'Working...'}</span>
                       </div>
                     )}
 

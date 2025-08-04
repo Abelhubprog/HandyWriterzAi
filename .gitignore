@@ -43,6 +43,9 @@ Thumbs.db
 # Optional backend venv (if created in root)
 #.venv/ 
 
+# CRUSH directory for agentic development
+.crush/ 
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
