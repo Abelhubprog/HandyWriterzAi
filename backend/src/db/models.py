@@ -8,6 +8,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 from enum import Enum
+from pgvector.sqlalchemy import Vector
 
 
 Base = declarative_base()
@@ -48,6 +49,15 @@ class DocumentType(Enum):
     COURSEWORK = "coursework"
 
 
+class MemoryType(Enum):
+    """Memory type classification for long-term storage."""
+    EPISODIC = "episodic"  # Specific experiences and events
+    SEMANTIC = "semantic"  # Facts, concepts, and knowledge
+    PROCEDURAL = "procedural"  # Skills and processes
+    PREFERENCE = "preference"  # User preferences and patterns
+    CONTEXTUAL = "contextual"  # Context-dependent information
+
+
 class User(Base):
     """Revolutionary user model with comprehensive academic profiling."""
     __tablename__ = "users"
@@ -85,6 +95,7 @@ class User(Base):
     conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
     documents = relationship("Document", back_populates="user", cascade="all, delete-orphan")
     user_fingerprints = relationship("UserFingerprint", back_populates="user", cascade="all, delete-orphan")
+    long_term_memories = relationship("LongTermMemory", back_populates="user", cascade="all, delete-orphan")
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert user to dictionary representation."""
@@ -771,4 +782,107 @@ class WorkbenchSectionStatus(Base):
     __table_args__ = (
         UniqueConstraint("assignment_id", "section_id", name="uq_workbench_section_unique"),
         Index("ix_workbench_section_status_created_desc", "status", "created_at"),
+    )
+
+
+class LongTermMemory(Base):
+    """Long-term memory storage with importance ranking and vector embeddings."""
+    __tablename__ = "long_term_memory"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    conversation_id = Column(UUID(as_uuid=True), ForeignKey("conversations.id"), nullable=True, index=True)
+    
+    # Memory content
+    content = Column(Text, nullable=False)
+    memory_type = Column(SQLEnum(MemoryType), nullable=False, index=True)
+    
+    # Importance and ranking
+    importance_score = Column(Float, default=0.5, nullable=False, index=True)  # 0.0 to 1.0
+    access_frequency = Column(Integer, default=0, nullable=False)
+    last_accessed = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Vector embedding for semantic search
+    embedding = Column(Vector(1536), nullable=True)
+    
+    # Metadata
+    tags = Column(ARRAY(String), nullable=True, default=list)
+    context = Column(JSON, nullable=True)  # Additional context information
+    source_summary = Column(Text, nullable=True)  # How this memory was created
+    
+    # Temporal information
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="long_term_memories")
+    conversation = relationship("Conversation")
+    
+    __table_args__ = (
+        Index("ix_memory_user_importance", "user_id", "importance_score"),
+        Index("ix_memory_type_importance", "memory_type", "importance_score"), 
+        Index("ix_memory_embedding_hnsw", "embedding", postgresql_using="hnsw", 
+              postgresql_with={"m": 16, "ef_construction": 64}, 
+              postgresql_ops={"embedding": "vector_cosine_ops"}),
+        Index("ix_memory_accessed_importance", "last_accessed", "importance_score"),
+    )
+
+
+class MemoryRetrieval(Base):
+    """Track memory retrieval patterns for adaptive importance scoring."""
+    __tablename__ = "memory_retrievals"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    memory_id = Column(UUID(as_uuid=True), ForeignKey("long_term_memory.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    conversation_id = Column(UUID(as_uuid=True), ForeignKey("conversations.id"), nullable=True, index=True)
+    
+    # Retrieval context
+    query_context = Column(Text, nullable=True)
+    similarity_score = Column(Float, nullable=True)
+    rank_position = Column(Integer, nullable=True)  # Position in retrieval results
+    
+    # Usage information
+    was_useful = Column(Boolean, nullable=True)  # User feedback or implicit signals
+    contributed_to_response = Column(Boolean, default=False)
+    
+    retrieved_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    memory = relationship("LongTermMemory")
+    user = relationship("User")
+    conversation = relationship("Conversation")
+    
+    __table_args__ = (
+        Index("ix_retrieval_memory_time", "memory_id", "retrieved_at"),
+        Index("ix_retrieval_user_time", "user_id", "retrieved_at"),
+    )
+
+
+class MemoryReflection(Base):
+    """Store reflection-generated memories for continuous learning."""
+    __tablename__ = "memory_reflections"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    conversation_id = Column(UUID(as_uuid=True), ForeignKey("conversations.id"), nullable=False, index=True)
+    
+    # Reflection content
+    reflection_prompt = Column(Text, nullable=False)
+    reflection_response = Column(Text, nullable=False)
+    extracted_memories = Column(JSON, nullable=True)  # List of memory objects
+    
+    # Quality metrics
+    confidence_score = Column(Float, nullable=True)
+    novelty_score = Column(Float, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    user = relationship("User")
+    conversation = relationship("Conversation")
+    
+    __table_args__ = (
+        Index("ix_reflection_user_time", "user_id", "created_at"),
+        Index("ix_reflection_conversation", "conversation_id", "created_at"),
     )

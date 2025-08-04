@@ -1,0 +1,144 @@
+# Memory Integration Configuration for HandyWriterzAI
+# Production-ready settings for the memory system
+
+memory_integrator:
+  # Core Configuration
+  max_memories_per_user: 10000
+  default_importance_threshold: 0.3
+  retrieval_limit: 8
+  reflection_trigger_threshold: 3
+
+  # Importance Scoring
+  importance_decay_rate: 0.95  # Weekly decay factor
+  access_boost_factor: 1.1
+  novelty_boost_factor: 1.2
+
+  # Vector Search
+  similarity_threshold: 0.9  # For duplicate detection
+  max_context_length: 2000
+
+# Safety Controls
+safety:
+  # Content Validation
+  max_content_length: 10000
+  allow_pii_by_default: false
+  spam_detection_enabled: true
+
+  # Rate Limiting
+  rate_limits:
+    max_memories_per_hour: 100
+    max_retrievals_per_minute: 50
+    max_reflection_calls_per_hour: 10
+    max_storage_mb_per_user: 50
+
+  # Cost Controls
+  cost_limits:
+    max_daily_cost_per_user: 5.0  # USD
+    embedding_cost_per_1k_tokens: 0.0001
+    gpt4_mini_cost_per_1k_tokens: 0.0015
+    vector_operation_cost: 0.00001
+    storage_cost_per_mb_month: 0.10
+
+  # Safety Thresholds
+  thresholds:
+    min_importance_threshold: 0.01
+    max_importance_threshold: 1.0
+    max_total_memories_per_user: 10000
+
+# Database Configuration
+database:
+  # Memory Tables
+  long_term_memory:
+    embedding_dimension: 1536
+    vector_index_type: "hnsw"
+    vector_index_params:
+      m: 16
+      ef_construction: 64
+
+  # Maintenance
+  maintenance:
+    importance_decay_days: 7
+    cleanup_old_memories_days: 90
+    never_accessed_cleanup_days: 180
+    vector_optimization_interval_hours: 24
+
+# Embedding Service
+embeddings:
+  model: "text-embedding-3-small"
+  max_tokens: 8191
+  dimension: 1536
+  rate_limit_delay: 0.1  # seconds
+  max_batch_size: 100
+
+# Reflection Service
+reflection:
+  model: "gpt-4o-mini"
+  temperature: 0.3
+  max_tokens: 1000
+  enable_auto_reflection: true
+  reflection_quality_threshold: 0.7
+
+# Memory Types Configuration
+memory_types:
+  episodic:
+    description: "Specific experiences and events"
+    default_importance: 0.5
+    decay_rate_multiplier: 1.0
+  
+  semantic:
+    description: "Facts, concepts, and knowledge"  
+    default_importance: 0.6
+    decay_rate_multiplier: 0.8  # Slower decay for facts
+  
+  procedural:
+    description: "Skills and processes"
+    default_importance: 0.7
+    decay_rate_multiplier: 0.7  # Even slower decay for skills
+  
+  preference:
+    description: "User preferences and patterns"
+    default_importance: 0.8
+    decay_rate_multiplier: 0.6  # Very slow decay for preferences
+  
+  contextual:
+    description: "Context-dependent information"
+    default_importance: 0.4
+    decay_rate_multiplier: 1.2  # Faster decay for context
+
+# Monitoring and Logging
+monitoring:
+  log_level: "INFO"
+  enable_cost_tracking: true
+  enable_performance_metrics: true
+  enable_safety_alerts: true
+  
+  # Metrics Collection
+  metrics:
+    track_retrieval_latency: true
+    track_embedding_latency: true
+    track_cost_per_operation: true
+    track_memory_effectiveness: true
+
+# Production Deployment
+production:
+  enable_safety_checks: true
+  enable_pii_detection: true
+  enable_rate_limiting: true
+  enable_cost_controls: true
+  
+  # Performance
+  connection_pool_size: 10
+  max_concurrent_operations: 100
+  cache_size: 1000  # Number of frequently accessed memories to cache
+  
+  # Backup and Recovery
+  backup_interval_hours: 24
+  retention_days: 365
+  enable_point_in_time_recovery: true
+
+# Development Settings
+development:
+  enable_debug_logging: true
+  disable_rate_limiting: false  # Keep rate limiting even in dev
+  mock_embedding_service: false
+  mock_reflection_service: false
