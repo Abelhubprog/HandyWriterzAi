@@ -41,10 +41,10 @@ Thumbs.db
 *.sw?
 
 # Optional backend venv (if created in root)
-#.venv/ 
+#.venv/
 
 # CRUSH directory for agentic development
-.crush/ 
+.crush/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
