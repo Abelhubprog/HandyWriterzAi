@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 
 from src.services.model_service import get_model_service
+from src.services.model_policy import get_model_policy_registry
 from src.services.security_service import require_authorization
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,27 @@ async def get_config_summary(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve configuration summary: {str(e)}"
+        )
+
+
+@router.get("/assignments")
+async def get_model_assignments(
+    current_user: Dict[str, Any] = Depends(require_authorization("admin_access"))
+):
+    """Return current model assignments per node as resolved by the policy registry."""
+    try:
+        registry = get_model_policy_registry()
+        assignments = await registry.get_current_assignments()
+        return {
+            "success": True,
+            "data": assignments,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Failed to get model assignments: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve model assignments: {str(e)}"
         )
 
 

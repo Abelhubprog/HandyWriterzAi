@@ -390,6 +390,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[80vh] p-0 overflow-hidden bg-white dark:bg-gray-900">
+        <DialogHeader>
+          <DialogTitle className="sr-only">Settings</DialogTitle>
+        </DialogHeader>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Setting</h2>

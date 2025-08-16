@@ -6,7 +6,7 @@ Production-ready text embeddings for semantic search and vector operations.
 import os
 import logging
 import asyncio
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 from openai import AsyncOpenAI
 import tiktoken
@@ -18,7 +18,8 @@ class RevolutionaryEmbeddingService:
     """Production-ready embedding service with advanced text processing."""
 
     def __init__(self):
-        self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        api_key = os.getenv("OPENAI_API_KEY")
+        self.client = AsyncOpenAI(api_key=api_key) if api_key else None
         self.model = "text-embedding-3-small"  # Efficient and cost-effective
         self.max_tokens = 8191  # Model limit
         self.dimension = 1536
@@ -33,7 +34,10 @@ class RevolutionaryEmbeddingService:
         self.rate_limit_delay = 0.1  # 100ms between requests
         self.max_batch_size = 100
 
-        logger.info("Revolutionary Embedding Service initialized")
+        if self.client is None:
+            logger.info("Embedding Service initialized in local mode (no OPENAI_API_KEY)")
+        else:
+            logger.info("Revolutionary Embedding Service initialized")
 
     async def embed_text(self, text: str, prefix: str = "") -> List[float]:
         """Generate embedding for a single text."""
@@ -41,7 +45,18 @@ class RevolutionaryEmbeddingService:
             # Prepare text
             processed_text = self._prepare_text(text, prefix)
 
-            # Generate embedding
+            # If no remote client, fall back to lightweight local embedding
+            if self.client is None:
+                # Simple hashing-based embedding fallback for tests/dev
+                import hashlib
+                h = hashlib.sha256(processed_text.encode("utf-8")).digest()
+                # Repeat/trim to dimension
+                arr = list(h) * (self.dimension // len(h) + 1)
+                vec = arr[: self.dimension]
+                norm = max(1.0, sum(v * v for v in vec) ** 0.5)
+                return [v / norm for v in vec]
+
+            # Generate embedding via OpenAI
             response = await self.client.embeddings.create(
                 model=self.model,
                 input=processed_text,

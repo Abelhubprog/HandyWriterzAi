@@ -1,0 +1,731 @@
+(.venv) PS D:\HandyWriterzAi> .\backend\scripts\test-win.ps1 -Req backend\requirements_cpu.txt
+== HandyWriterzAI Windows test runner ==
+Activating venv...
+Using venv at: .venv
+Python version:
+Python 3.12.3
+Installing deps from backend\requirements_cpu.txt...
+Collecting agentic-doc==0.3.1 (from -r backend\requirements_cpu.txt (line 7))
+  Using cached agentic_doc-0.3.1-py3-none-any.whl.metadata (19 kB)
+Collecting aiohappyeyeballs==2.6.1 (from -r backend\requirements_cpu.txt (line 9))
+  Using cached aiohappyeyeballs-2.6.1-py3-none-any.whl.metadata (5.9 kB)
+Collecting aiohttp==3.12.14 (from -r backend\requirements_cpu.txt (line 11))
+  Using cached aiohttp-3.12.14-cp312-cp312-win_amd64.whl.metadata (7.9 kB)
+Collecting aioredis==2.0.1 (from -r backend\requirements_cpu.txt (line 13))
+  Using cached aioredis-2.0.1-py3-none-any.whl.metadata (15 kB)
+Collecting aiosignal==1.4.0 (from -r backend\requirements_cpu.txt (line 15))
+  Using cached aiosignal-1.4.0-py3-none-any.whl.metadata (3.7 kB)
+Collecting alembic==1.16.4 (from -r backend\requirements_cpu.txt (line 17))
+  Using cached alembic-1.16.4-py3-none-any.whl.metadata (7.3 kB)
+Collecting amqp==5.3.1 (from -r backend\requirements_cpu.txt (line 19))
+  Using cached amqp-5.3.1-py3-none-any.whl.metadata (8.9 kB)
+Collecting annotated-types==0.7.0 (from -r backend\requirements_cpu.txt (line 21))
+  Using cached annotated_types-0.7.0-py3-none-any.whl.metadata (15 kB)
+Collecting anthropic==0.58.2 (from -r backend\requirements_cpu.txt (line 23))
+  Using cached anthropic-0.58.2-py3-none-any.whl.metadata (27 kB)
+Collecting anyio==4.9.0 (from -r backend\requirements_cpu.txt (line 25))
+  Using cached anyio-4.9.0-py3-none-any.whl.metadata (4.7 kB)
+Collecting arxiv==2.2.0 (from -r backend\requirements_cpu.txt (line 35))
+  Using cached arxiv-2.2.0-py3-none-any.whl.metadata (6.3 kB)
+Collecting async-timeout==5.0.1 (from -r backend\requirements_cpu.txt (line 37))
+  Using cached async_timeout-5.0.1-py3-none-any.whl.metadata (5.1 kB)
+Collecting asyncpg==0.30.0 (from -r backend\requirements_cpu.txt (line 39))
+  Using cached asyncpg-0.30.0-cp312-cp312-win_amd64.whl.metadata (5.2 kB)
+Collecting attrs==25.3.0 (from -r backend\requirements_cpu.txt (line 41))
+  Using cached attrs-25.3.0-py3-none-any.whl.metadata (10 kB)
+Collecting azure-core==1.35.0 (from -r backend\requirements_cpu.txt (line 46))
+  Using cached azure_core-1.35.0-py3-none-any.whl.metadata (44 kB)
+Collecting azure-storage-blob==12.26.0 (from -r backend\requirements_cpu.txt (line 48))
+  Using cached azure_storage_blob-12.26.0-py3-none-any.whl.metadata (26 kB)
+Collecting backoff==2.2.1 (from -r backend\requirements_cpu.txt (line 50))
+  Using cached backoff-2.2.1-py3-none-any.whl.metadata (14 kB)
+Collecting bcrypt==4.3.0 (from -r backend\requirements_cpu.txt (line 52))
+  Using cached bcrypt-4.3.0-cp39-abi3-win_amd64.whl.metadata (10 kB)
+Collecting beautifulsoup4==4.13.4 (from -r backend\requirements_cpu.txt (line 57))
+  Using cached beautifulsoup4-4.13.4-py3-none-any.whl.metadata (3.8 kB)
+Collecting billiard==4.2.1 (from -r backend\requirements_cpu.txt (line 59))
+  Using cached billiard-4.2.1-py3-none-any.whl.metadata (4.4 kB)
+Collecting blockbuster==1.5.25 (from -r backend\requirements_cpu.txt (line 61))
+  Using cached blockbuster-1.5.25-py3-none-any.whl.metadata (10 kB)
+Collecting boto3==1.39.10 (from -r backend\requirements_cpu.txt (line 63))
+  Using cached boto3-1.39.10-py3-none-any.whl.metadata (6.7 kB)
+Collecting botocore==1.39.10 (from -r backend\requirements_cpu.txt (line 67))
+  Using cached botocore-1.39.10-py3-none-any.whl.metadata (5.7 kB)
+Collecting brotli==1.1.0 (from -r backend\requirements_cpu.txt (line 71))
+  Using cached Brotli-1.1.0-cp312-cp312-win_amd64.whl.metadata (5.6 kB)
+Collecting build==1.2.2.post1 (from -r backend\requirements_cpu.txt (line 73))
+  Using cached build-1.2.2.post1-py3-none-any.whl.metadata (6.5 kB)
+Collecting cachetools==5.5.2 (from -r backend\requirements_cpu.txt (line 75))
+  Using cached cachetools-5.5.2-py3-none-any.whl.metadata (5.4 kB)
+Collecting celery==5.5.3 (from celery[redis]==5.5.3->-r backend\requirements_cpu.txt (line 77))
+  Using cached celery-5.5.3-py3-none-any.whl.metadata (22 kB)
+Collecting certifi==2025.7.14 (from -r backend\requirements_cpu.txt (line 79))
+  Using cached certifi-2025.7.14-py3-none-any.whl.metadata (2.4 kB)
+Collecting cffi==1.17.1 (from -r backend\requirements_cpu.txt (line 85))
+  Using cached cffi-1.17.1-cp312-cp312-win_amd64.whl.metadata (1.6 kB)
+Collecting charset-normalizer==3.4.2 (from -r backend\requirements_cpu.txt (line 87))
+  Using cached charset_normalizer-3.4.2-cp312-cp312-win_amd64.whl.metadata (36 kB)
+Collecting chromadb==1.0.15 (from -r backend\requirements_cpu.txt (line 89))
+  Using cached chromadb-1.0.15-cp39-abi3-win_amd64.whl.metadata (7.1 kB)
+Collecting click==8.2.1 (from -r backend\requirements_cpu.txt (line 91))
+  Using cached click-8.2.1-py3-none-any.whl.metadata (2.5 kB)
+Collecting click-didyoumean==0.3.1 (from -r backend\requirements_cpu.txt (line 100))
+  Using cached click_didyoumean-0.3.1-py3-none-any.whl.metadata (3.9 kB)
+Collecting click-plugins==1.1.1.2 (from -r backend\requirements_cpu.txt (line 102))
+  Using cached click_plugins-1.1.1.2-py2.py3-none-any.whl.metadata (6.5 kB)
+Collecting click-repl==0.3.0 (from -r backend\requirements_cpu.txt (line 104))
+  Using cached click_repl-0.3.0-py3-none-any.whl.metadata (3.6 kB)
+Collecting cloudpickle==3.1.1 (from -r backend\requirements_cpu.txt (line 106))
+  Using cached cloudpickle-3.1.1-py3-none-any.whl.metadata (7.1 kB)
+Collecting coloredlogs==15.0.1 (from -r backend\requirements_cpu.txt (line 108))
+  Using cached coloredlogs-15.0.1-py2.py3-none-any.whl.metadata (12 kB)
+Collecting cryptography==44.0.3 (from -r backend\requirements_cpu.txt (line 110))
+  Using cached cryptography-44.0.3-cp39-abi3-win_amd64.whl.metadata (5.7 kB)
+Collecting deprecation==2.1.0 (from -r backend\requirements_cpu.txt (line 116))
+  Using cached deprecation-2.1.0-py2.py3-none-any.whl.metadata (4.6 kB)
+Collecting distro==1.9.0 (from -r backend\requirements_cpu.txt (line 120))
+  Using cached distro-1.9.0-py3-none-any.whl.metadata (6.8 kB)
+Collecting docstring-parser==0.17.0 (from -r backend\requirements_cpu.txt (line 126))
+  Using cached docstring_parser-0.17.0-py3-none-any.whl.metadata (3.5 kB)
+Collecting docx2txt==0.9 (from -r backend\requirements_cpu.txt (line 128))
+  Using cached docx2txt-0.9-py3-none-any.whl.metadata (529 bytes)
+Collecting durationpy==0.10 (from -r backend\requirements_cpu.txt (line 130))
+  Using cached durationpy-0.10-py3-none-any.whl.metadata (340 bytes)
+Collecting ecdsa==0.19.1 (from -r backend\requirements_cpu.txt (line 132))
+  Using cached ecdsa-0.19.1-py2.py3-none-any.whl.metadata (29 kB)
+Collecting et-xmlfile==2.0.0 (from -r backend\requirements_cpu.txt (line 134))
+  Using cached et_xmlfile-2.0.0-py3-none-any.whl.metadata (2.7 kB)
+Collecting fastapi==0.116.1 (from -r backend\requirements_cpu.txt (line 136))
+  Using cached fastapi-0.116.1-py3-none-any.whl.metadata (28 kB)
+Collecting feedparser==6.0.11 (from -r backend\requirements_cpu.txt (line 138))
+  Using cached feedparser-6.0.11-py3-none-any.whl.metadata (2.4 kB)
+Collecting filelock==3.18.0 (from -r backend\requirements_cpu.txt (line 142))
+  Using cached filelock-3.18.0-py3-none-any.whl.metadata (2.9 kB)
+Collecting filetype==1.2.0 (from -r backend\requirements_cpu.txt (line 148))
+  Using cached filetype-1.2.0-py2.py3-none-any.whl.metadata (6.5 kB)
+Collecting flatbuffers==25.2.10 (from -r backend\requirements_cpu.txt (line 150))
+  Using cached flatbuffers-25.2.10-py2.py3-none-any.whl.metadata (875 bytes)
+Collecting forbiddenfruit==0.1.4 (from -r backend\requirements_cpu.txt (line 152))
+  Using cached forbiddenfruit-0.1.4-py3-none-any.whl
+Collecting fpdf==1.7.2 (from -r backend\requirements_cpu.txt (line 154))
+  Using cached fpdf-1.7.2-py2.py3-none-any.whl
+Collecting frozenlist==1.7.0 (from -r backend\requirements_cpu.txt (line 156))
+  Using cached frozenlist-1.7.0-cp312-cp312-win_amd64.whl.metadata (19 kB)
+Collecting fsspec==2025.7.0 (from -r backend\requirements_cpu.txt (line 160))
+  Using cached fsspec-2025.7.0-py3-none-any.whl.metadata (12 kB)
+Collecting google-ai-generativelanguage==0.6.18 (from -r backend\requirements_cpu.txt (line 164))
+  Using cached google_ai_generativelanguage-0.6.18-py3-none-any.whl.metadata (9.8 kB)
+Collecting google-api-core==2.25.1 (from google-api-core[grpc]==2.25.1->-r backend\requirements_cpu.txt (line 166))
+  Using cached google_api_core-2.25.1-py3-none-any.whl.metadata (3.0 kB)
+Collecting google-api-python-client==2.176.0 (from -r backend\requirements_cpu.txt (line 175))
+  Using cached google_api_python_client-2.176.0-py3-none-any.whl.metadata (7.0 kB)
+Collecting google-auth==2.40.3 (from -r backend\requirements_cpu.txt (line 177))
+  Using cached google_auth-2.40.3-py2.py3-none-any.whl.metadata (6.2 kB)
+Collecting google-auth-httplib2==0.2.0 (from -r backend\requirements_cpu.txt (line 192))
+  Using cached google_auth_httplib2-0.2.0-py2.py3-none-any.whl.metadata (2.2 kB)
+Collecting google-auth-oauthlib==1.2.2 (from -r backend\requirements_cpu.txt (line 194))
+  Using cached google_auth_oauthlib-1.2.2-py3-none-any.whl.metadata (2.7 kB)
+Collecting google-cloud-aiplatform==1.104.0 (from -r backend\requirements_cpu.txt (line 196))
+  Using cached google_cloud_aiplatform-1.104.0-py2.py3-none-any.whl.metadata (38 kB)
+Collecting google-cloud-bigquery==3.35.0 (from -r backend\requirements_cpu.txt (line 198))
+  Using cached google_cloud_bigquery-3.35.0-py3-none-any.whl.metadata (8.0 kB)
+Collecting google-cloud-core==2.4.3 (from -r backend\requirements_cpu.txt (line 200))
+  Using cached google_cloud_core-2.4.3-py2.py3-none-any.whl.metadata (2.7 kB)
+Collecting google-cloud-resource-manager==1.14.2 (from -r backend\requirements_cpu.txt (line 204))
+  Using cached google_cloud_resource_manager-1.14.2-py3-none-any.whl.metadata (9.6 kB)
+Collecting google-cloud-storage==2.19.0 (from -r backend\requirements_cpu.txt (line 206))
+  Using cached google_cloud_storage-2.19.0-py2.py3-none-any.whl.metadata (9.1 kB)
+Collecting google-crc32c==1.7.1 (from -r backend\requirements_cpu.txt (line 208))
+  Using cached google_crc32c-1.7.1-cp312-cp312-win_amd64.whl.metadata (2.4 kB)
+Collecting google-genai==1.26.0 (from -r backend\requirements_cpu.txt (line 212))
+  Using cached google_genai-1.26.0-py3-none-any.whl.metadata (42 kB)
+Collecting google-resumable-media==2.7.2 (from -r backend\requirements_cpu.txt (line 216))
+  Using cached google_resumable_media-2.7.2-py2.py3-none-any.whl.metadata (2.2 kB)
+Collecting googleapis-common-protos==1.70.0 (from googleapis-common-protos[grpc]==1.70.0->-r backend\requirements_cpu.txt (line 220))
+  Using cached googleapis_common_protos-1.70.0-py3-none-any.whl.metadata (9.3 kB)
+Collecting gotrue==2.12.3 (from -r backend\requirements_cpu.txt (line 226))
+  Using cached gotrue-2.12.3-py3-none-any.whl.metadata (6.5 kB)
+Collecting greenlet==3.2.3 (from -r backend\requirements_cpu.txt (line 228))
+  Using cached greenlet-3.2.3-cp312-cp312-win_amd64.whl.metadata (4.2 kB)
+Collecting groq==0.30.0 (from -r backend\requirements_cpu.txt (line 230))
+  Using cached groq-0.30.0-py3-none-any.whl.metadata (16 kB)
+Collecting grpc-google-iam-v1==0.14.2 (from -r backend\requirements_cpu.txt (line 232))
+  Using cached grpc_google_iam_v1-0.14.2-py3-none-any.whl.metadata (9.1 kB)
+Collecting grpcio==1.73.1 (from -r backend\requirements_cpu.txt (line 234))
+  Using cached grpcio-1.73.1-cp312-cp312-win_amd64.whl.metadata (4.0 kB)
+Collecting grpcio-status==1.73.1 (from -r backend\requirements_cpu.txt (line 242))
+  Using cached grpcio_status-1.73.1-py3-none-any.whl.metadata (1.1 kB)
+Collecting h11==0.16.0 (from -r backend\requirements_cpu.txt (line 244))
+  Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting h2==4.2.0 (from -r backend\requirements_cpu.txt (line 248))
+  Using cached h2-4.2.0-py3-none-any.whl.metadata (5.1 kB)
+Collecting hf-xet==1.1.5 (from -r backend\requirements_cpu.txt (line 250))
+  Using cached hf_xet-1.1.5-cp37-abi3-win_amd64.whl.metadata (883 bytes)
+Collecting hpack==4.1.0 (from -r backend\requirements_cpu.txt (line 252))
+  Using cached hpack-4.1.0-py3-none-any.whl.metadata (4.6 kB)
+Collecting httpcore==1.0.9 (from -r backend\requirements_cpu.txt (line 254))
+  Using cached httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Collecting httplib2==0.22.0 (from -r backend\requirements_cpu.txt (line 256))
+  Using cached httplib2-0.22.0-py3-none-any.whl.metadata (2.6 kB)
+Collecting httptools==0.6.4 (from -r backend\requirements_cpu.txt (line 260))
+  Using cached httptools-0.6.4-cp312-cp312-win_amd64.whl.metadata (3.7 kB)
+Collecting httpx==0.28.1 (from httpx[http2]==0.28.1->-r backend\requirements_cpu.txt (line 262))
+  Using cached httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Collecting huggingface-hub==0.33.4 (from -r backend\requirements_cpu.txt (line 279))
+  Using cached huggingface_hub-0.33.4-py3-none-any.whl.metadata (14 kB)
+Collecting humanfriendly==10.0 (from -r backend\requirements_cpu.txt (line 284))
+  Using cached humanfriendly-10.0-py2.py3-none-any.whl.metadata (9.2 kB)
+Collecting hyperframe==6.1.0 (from -r backend\requirements_cpu.txt (line 286))
+  Using cached hyperframe-6.1.0-py3-none-any.whl.metadata (4.3 kB)
+Collecting idna==3.10 (from -r backend\requirements_cpu.txt (line 288))
+  Using cached idna-3.10-py3-none-any.whl.metadata (10 kB)
+Collecting importlib-metadata==8.7.0 (from -r backend\requirements_cpu.txt (line 294))
+  Using cached importlib_metadata-8.7.0-py3-none-any.whl.metadata (4.8 kB)
+Collecting importlib-resources==6.5.2 (from -r backend\requirements_cpu.txt (line 296))
+  Using cached importlib_resources-6.5.2-py3-none-any.whl.metadata (3.9 kB)
+Collecting iniconfig==2.1.0 (from -r backend\requirements_cpu.txt (line 298))
+  Using cached iniconfig-2.1.0-py3-none-any.whl.metadata (2.7 kB)
+Collecting isodate==0.7.2 (from -r backend\requirements_cpu.txt (line 300))
+  Using cached isodate-0.7.2-py3-none-any.whl.metadata (11 kB)
+Collecting jinja2==3.1.6 (from -r backend\requirements_cpu.txt (line 302))
+  Using cached jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+Collecting jiter==0.10.0 (from -r backend\requirements_cpu.txt (line 304))
+  Using cached jiter-0.10.0-cp312-cp312-win_amd64.whl.metadata (5.3 kB)
+Collecting jmespath==1.0.1 (from -r backend\requirements_cpu.txt (line 308))
+  Using cached jmespath-1.0.1-py3-none-any.whl.metadata (7.6 kB)
+Collecting joblib==1.5.1 (from -r backend\requirements_cpu.txt (line 312))
+  Using cached joblib-1.5.1-py3-none-any.whl.metadata (5.6 kB)
+Collecting jsonpatch==1.33 (from -r backend\requirements_cpu.txt (line 314))
+  Using cached jsonpatch-1.33-py2.py3-none-any.whl.metadata (3.0 kB)
+Collecting jsonpointer==3.0.0 (from -r backend\requirements_cpu.txt (line 316))
+  Using cached jsonpointer-3.0.0-py2.py3-none-any.whl.metadata (2.3 kB)
+Collecting jsonschema==4.25.0 (from -r backend\requirements_cpu.txt (line 318))
+  Using cached jsonschema-4.25.0-py3-none-any.whl.metadata (7.7 kB)
+Collecting jsonschema-rs==0.29.1 (from -r backend\requirements_cpu.txt (line 322))
+  Using cached jsonschema_rs-0.29.1-cp312-cp312-win_amd64.whl.metadata (14 kB)
+Collecting jsonschema-specifications==2025.4.1 (from -r backend\requirements_cpu.txt (line 324))
+  Using cached jsonschema_specifications-2025.4.1-py3-none-any.whl.metadata (2.9 kB)
+Collecting kombu==5.5.4 (from kombu[redis]==5.5.4->-r backend\requirements_cpu.txt (line 326))
+  Using cached kombu-5.5.4-py3-none-any.whl.metadata (3.5 kB)
+Collecting kubernetes==33.1.0 (from -r backend\requirements_cpu.txt (line 328))
+  Using cached kubernetes-33.1.0-py2.py3-none-any.whl.metadata (1.7 kB)
+Collecting langchain==0.3.26 (from -r backend\requirements_cpu.txt (line 330))
+  Using cached langchain-0.3.26-py3-none-any.whl.metadata (7.8 kB)
+Collecting langchain-community==0.3.27 (from -r backend\requirements_cpu.txt (line 332))
+  Using cached langchain_community-0.3.27-py3-none-any.whl.metadata (2.9 kB)
+Collecting langchain-core==0.3.70 (from -r backend\requirements_cpu.txt (line 334))
+  Using cached langchain_core-0.3.70-py3-none-any.whl.metadata (5.8 kB)
+Collecting langchain-google-genai==2.1.8 (from -r backend\requirements_cpu.txt (line 346))
+  Using cached langchain_google_genai-2.1.8-py3-none-any.whl.metadata (7.0 kB)
+Collecting langchain-groq==0.3.6 (from -r backend\requirements_cpu.txt (line 348))
+  Using cached langchain_groq-0.3.6-py3-none-any.whl.metadata (2.6 kB)
+Collecting langchain-openai==0.3.28 (from -r backend\requirements_cpu.txt (line 350))
+  Using cached langchain_openai-0.3.28-py3-none-any.whl.metadata (2.3 kB)
+Collecting langchain-text-splitters==0.3.8 (from -r backend\requirements_cpu.txt (line 352))
+  Using cached langchain_text_splitters-0.3.8-py3-none-any.whl.metadata (1.9 kB)
+Collecting langgraph==0.5.4 (from -r backend\requirements_cpu.txt (line 354))
+  Using cached langgraph-0.5.4-py3-none-any.whl.metadata (6.8 kB)
+Collecting langgraph-api==0.2.98 (from -r backend\requirements_cpu.txt (line 359))
+  Using cached langgraph_api-0.2.98-py3-none-any.whl.metadata (3.9 kB)
+Collecting langgraph-checkpoint==2.1.1 (from -r backend\requirements_cpu.txt (line 363))
+  Using cached langgraph_checkpoint-2.1.1-py3-none-any.whl.metadata (4.2 kB)
+Collecting langgraph-cli==0.3.5 (from langgraph-cli[inmem]==0.3.5->-r backend\requirements_cpu.txt (line 369))
+  Using cached langgraph_cli-0.3.5-py3-none-any.whl.metadata (3.8 kB)
+Collecting langgraph-prebuilt==0.5.2 (from -r backend\requirements_cpu.txt (line 371))
+  Using cached langgraph_prebuilt-0.5.2-py3-none-any.whl.metadata (4.5 kB)
+Collecting langgraph-runtime-inmem==0.6.0 (from -r backend\requirements_cpu.txt (line 373))
+  Using cached langgraph_runtime_inmem-0.6.0-py3-none-any.whl.metadata (565 bytes)
+Collecting langgraph-sdk==0.1.74 (from -r backend\requirements_cpu.txt (line 377))
+  Using cached langgraph_sdk-0.1.74-py3-none-any.whl.metadata (1.5 kB)
+Collecting langsmith==0.4.8 (from -r backend\requirements_cpu.txt (line 382))
+  Using cached langsmith-0.4.8-py3-none-any.whl.metadata (15 kB)
+Collecting lxml==6.0.0 (from -r backend\requirements_cpu.txt (line 387))
+  Using cached lxml-6.0.0-cp312-cp312-win_amd64.whl.metadata (6.8 kB)
+Collecting mako==1.3.10 (from -r backend\requirements_cpu.txt (line 391))
+  Using cached mako-1.3.10-py3-none-any.whl.metadata (2.9 kB)
+Collecting markdown-it-py==3.0.0 (from -r backend\requirements_cpu.txt (line 393))
+  Using cached markdown_it_py-3.0.0-py3-none-any.whl.metadata (6.9 kB)
+Collecting markupsafe==3.0.2 (from -r backend\requirements_cpu.txt (line 395))
+  Using cached MarkupSafe-3.0.2-cp312-cp312-win_amd64.whl.metadata (4.1 kB)
+Collecting mdurl==0.1.2 (from -r backend\requirements_cpu.txt (line 399))
+  Using cached mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+Collecting mmh3==5.1.0 (from -r backend\requirements_cpu.txt (line 401))
+  Using cached mmh3-5.1.0-cp312-cp312-win_amd64.whl.metadata (16 kB)
+Collecting mpmath==1.3.0 (from -r backend\requirements_cpu.txt (line 403))
+  Using cached mpmath-1.3.0-py3-none-any.whl.metadata (8.6 kB)
+Collecting multidict==6.6.3 (from -r backend\requirements_cpu.txt (line 405))
+  Using cached multidict-6.6.3-cp312-cp312-win_amd64.whl.metadata (5.4 kB)
+Collecting mypy==1.17.0 (from -r backend\requirements_cpu.txt (line 409))
+  Using cached mypy-1.17.0-cp312-cp312-win_amd64.whl.metadata (2.2 kB)
+Collecting mypy-extensions==1.1.0 (from -r backend\requirements_cpu.txt (line 411))
+  Using cached mypy_extensions-1.1.0-py3-none-any.whl.metadata (1.1 kB)
+Collecting networkx==3.5 (from -r backend\requirements_cpu.txt (line 413))
+  Using cached networkx-3.5-py3-none-any.whl.metadata (6.3 kB)
+Collecting numpy==2.2.6 (from -r backend\requirements_cpu.txt (line 415))
+  Using cached numpy-2.2.6-cp312-cp312-win_amd64.whl.metadata (60 kB)
+Collecting oauthlib==3.3.1 (from -r backend\requirements_cpu.txt (line 425))
+  Using cached oauthlib-3.3.1-py3-none-any.whl.metadata (7.9 kB)
+Collecting onnxruntime==1.22.1 (from -r backend\requirements_cpu.txt (line 429))
+  Using cached onnxruntime-1.22.1-cp312-cp312-win_amd64.whl.metadata (5.1 kB)
+Collecting openai==1.97.0 (from -r backend\requirements_cpu.txt (line 431))
+  Using cached openai-1.97.0-py3-none-any.whl.metadata (29 kB)
+Collecting opencv-python-headless==4.12.0.88 (from -r backend\requirements_cpu.txt (line 435))
+  Using cached opencv_python_headless-4.12.0.88-cp37-abi3-win_amd64.whl.metadata (20 kB)
+Collecting openpyxl==3.1.5 (from -r backend\requirements_cpu.txt (line 437))
+  Using cached openpyxl-3.1.5-py2.py3-none-any.whl.metadata (2.5 kB)
+Collecting opentelemetry-api==1.35.0 (from -r backend\requirements_cpu.txt (line 439))
+  Using cached opentelemetry_api-1.35.0-py3-none-any.whl.metadata (1.5 kB)
+Collecting opentelemetry-exporter-otlp-proto-common==1.35.0 (from -r backend\requirements_cpu.txt (line 446))
+  Using cached opentelemetry_exporter_otlp_proto_common-1.35.0-py3-none-any.whl.metadata (1.8 kB)
+Collecting opentelemetry-exporter-otlp-proto-grpc==1.35.0 (from -r backend\requirements_cpu.txt (line 448))
+  Using cached opentelemetry_exporter_otlp_proto_grpc-1.35.0-py3-none-any.whl.metadata (2.4 kB)
+Collecting opentelemetry-proto==1.35.0 (from -r backend\requirements_cpu.txt (line 450))
+  Using cached opentelemetry_proto-1.35.0-py3-none-any.whl.metadata (2.3 kB)
+Collecting opentelemetry-sdk==1.35.0 (from -r backend\requirements_cpu.txt (line 454))
+  Using cached opentelemetry_sdk-1.35.0-py3-none-any.whl.metadata (1.5 kB)
+Collecting opentelemetry-semantic-conventions==0.56b0 (from -r backend\requirements_cpu.txt (line 459))
+  Using cached opentelemetry_semantic_conventions-0.56b0-py3-none-any.whl.metadata (2.4 kB)
+Collecting orjson==3.11.0 (from -r backend\requirements_cpu.txt (line 461))
+  Using cached orjson-3.11.0-cp312-cp312-win_amd64.whl.metadata (43 kB)
+Collecting ormsgpack==1.10.0 (from -r backend\requirements_cpu.txt (line 467))
+  Using cached ormsgpack-1.10.0-cp312-cp312-win_amd64.whl.metadata (44 kB)
+Collecting overrides==7.7.0 (from -r backend\requirements_cpu.txt (line 469))
+  Using cached overrides-7.7.0-py3-none-any.whl.metadata (5.8 kB)
+Collecting packaging==25.0 (from -r backend\requirements_cpu.txt (line 471))
+  Using cached packaging-25.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting pandas==2.3.1 (from -r backend\requirements_cpu.txt (line 484))
+  Using cached pandas-2.3.1-cp312-cp312-win_amd64.whl.metadata (19 kB)
+Collecting passlib==1.7.4 (from passlib[bcrypt]==1.7.4->-r backend\requirements_cpu.txt (line 486))
+  Using cached passlib-1.7.4-py2.py3-none-any.whl.metadata (1.7 kB)
+Collecting pathspec==0.12.1 (from -r backend\requirements_cpu.txt (line 488))
+  Using cached pathspec-0.12.1-py3-none-any.whl.metadata (21 kB)
+Collecting pillow==11.3.0 (from -r backend\requirements_cpu.txt (line 490))
+  Using cached pillow-11.3.0-cp312-cp312-win_amd64.whl.metadata (9.2 kB)
+Collecting pillow-heif==1.0.0 (from -r backend\requirements_cpu.txt (line 496))
+  Using cached pillow_heif-1.0.0-cp312-cp312-win_amd64.whl.metadata (9.8 kB)
+Collecting pluggy==1.6.0 (from -r backend\requirements_cpu.txt (line 498))
+  Using cached pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+Collecting postgrest==1.1.1 (from -r backend\requirements_cpu.txt (line 500))
+  Using cached postgrest-1.1.1-py3-none-any.whl.metadata (3.5 kB)
+Collecting posthog==5.4.0 (from -r backend\requirements_cpu.txt (line 502))
+  Using cached posthog-5.4.0-py3-none-any.whl.metadata (5.7 kB)
+Collecting prometheus-client==0.22.1 (from -r backend\requirements_cpu.txt (line 504))
+  Using cached prometheus_client-0.22.1-py3-none-any.whl.metadata (1.9 kB)
+Collecting prompt-toolkit==3.0.51 (from -r backend\requirements_cpu.txt (line 506))
+  Using cached prompt_toolkit-3.0.51-py3-none-any.whl.metadata (6.4 kB)
+Collecting propcache==0.3.2 (from -r backend\requirements_cpu.txt (line 508))
+  Using cached propcache-0.3.2-cp312-cp312-win_amd64.whl.metadata (12 kB)
+Collecting proto-plus==1.26.1 (from -r backend\requirements_cpu.txt (line 512))
+  Using cached proto_plus-1.26.1-py3-none-any.whl.metadata (2.2 kB)
+Collecting protobuf==6.31.1 (from -r backend\requirements_cpu.txt (line 518))
+  Using cached protobuf-6.31.1-cp310-abi3-win_amd64.whl.metadata (593 bytes)
+Collecting psycopg2-binary==2.9.10 (from -r backend\requirements_cpu.txt (line 531))
+  Using cached psycopg2_binary-2.9.10-cp312-cp312-win_amd64.whl.metadata (5.0 kB)
+Collecting pyasn1==0.6.1 (from -r backend\requirements_cpu.txt (line 533))
+  Using cached pyasn1-0.6.1-py3-none-any.whl.metadata (8.4 kB)
+Collecting pyasn1-modules==0.4.2 (from -r backend\requirements_cpu.txt (line 538))
+  Using cached pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+Collecting pybase64==1.4.1 (from -r backend\requirements_cpu.txt (line 540))
+  Using cached pybase64-1.4.1-cp312-cp312-win_amd64.whl.metadata (8.7 kB)
+Collecting pycparser==2.22 (from -r backend\requirements_cpu.txt (line 542))
+  Using cached pycparser-2.22-py3-none-any.whl.metadata (943 bytes)
+Collecting pydantic==2.11.7 (from -r backend\requirements_cpu.txt (line 544))
+  Using cached pydantic-2.11.7-py3-none-any.whl.metadata (67 kB)
+Collecting pydantic-core==2.33.2 (from -r backend\requirements_cpu.txt (line 564))
+  Using cached pydantic_core-2.33.2-cp312-cp312-win_amd64.whl.metadata (6.9 kB)
+Collecting pydantic-settings==2.10.1 (from -r backend\requirements_cpu.txt (line 566))
+  Using cached pydantic_settings-2.10.1-py3-none-any.whl.metadata (3.4 kB)
+Collecting pygments==2.19.2 (from -r backend\requirements_cpu.txt (line 568))
+  Using cached pygments-2.19.2-py3-none-any.whl.metadata (2.5 kB)
+Collecting pyjwt==2.10.1 (from -r backend\requirements_cpu.txt (line 572))
+  Using cached PyJWT-2.10.1-py3-none-any.whl.metadata (4.0 kB)
+Collecting pymupdf==1.26.3 (from -r backend\requirements_cpu.txt (line 577))
+  Using cached pymupdf-1.26.3-cp39-abi3-win_amd64.whl.metadata (3.4 kB)
+Collecting pyparsing==3.2.3 (from -r backend\requirements_cpu.txt (line 579))
+  Using cached pyparsing-3.2.3-py3-none-any.whl.metadata (5.0 kB)
+Collecting pypdf==5.8.0 (from -r backend\requirements_cpu.txt (line 581))
+  Using cached pypdf-5.8.0-py3-none-any.whl.metadata (7.1 kB)
+Collecting pypdf2==3.0.1 (from -r backend\requirements_cpu.txt (line 583))
+  Using cached pypdf2-3.0.1-py3-none-any.whl.metadata (6.8 kB)
+Collecting pypika==0.48.9 (from -r backend\requirements_cpu.txt (line 585))
+  Using cached pypika-0.48.9-py2.py3-none-any.whl
+Collecting pyproject-hooks==1.2.0 (from -r backend\requirements_cpu.txt (line 587))
+  Using cached pyproject_hooks-1.2.0-py3-none-any.whl.metadata (1.3 kB)
+Collecting pytest==8.4.1 (from -r backend\requirements_cpu.txt (line 589))
+  Using cached pytest-8.4.1-py3-none-any.whl.metadata (7.7 kB)
+Collecting pytest-asyncio==1.1.0 (from -r backend\requirements_cpu.txt (line 593))
+  Using cached pytest_asyncio-1.1.0-py3-none-any.whl.metadata (4.1 kB)
+Collecting python-dateutil==2.9.0.post0 (from -r backend\requirements_cpu.txt (line 595))
+  Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+Collecting python-docx==1.2.0 (from -r backend\requirements_cpu.txt (line 604))
+  Using cached python_docx-1.2.0-py3-none-any.whl.metadata (2.0 kB)
+Collecting python-dotenv==1.1.1 (from -r backend\requirements_cpu.txt (line 606))
+  Using cached python_dotenv-1.1.1-py3-none-any.whl.metadata (24 kB)
+Collecting python-jose==3.5.0 (from python-jose[cryptography]==3.5.0->-r backend\requirements_cpu.txt (line 612))
+  Using cached python_jose-3.5.0-py2.py3-none-any.whl.metadata (5.5 kB)
+Collecting python-multipart==0.0.20 (from -r backend\requirements_cpu.txt (line 614))
+  Using cached python_multipart-0.0.20-py3-none-any.whl.metadata (1.8 kB)
+Collecting pytrends==4.9.2 (from -r backend\requirements_cpu.txt (line 616))
+  Using cached pytrends-4.9.2-py3-none-any.whl.metadata (13 kB)
+Collecting pytz==2025.2 (from -r backend\requirements_cpu.txt (line 618))
+  Using cached pytz-2025.2-py2.py3-none-any.whl.metadata (22 kB)
+Collecting pyyaml==6.0.2 (from -r backend\requirements_cpu.txt (line 620))
+  Using cached PyYAML-6.0.2-cp312-cp312-win_amd64.whl.metadata (2.1 kB)
+ERROR: Ignored the following versions that require a different python version: 0.1.0 Requires-Python 
+>=3.9.0,<3.12; 0.1.1 Requires-Python >=3.9.0,<3.12; 0.1.2 Requires-Python >=3.9.0,<3.12; 0.1.3 Requires-Python >=3.9.0,<3.12; 0.1.4 Requires-Python >=3.9.0,<3.12; 0.1.5 Requires-Python >=3.9.0,<3.12; 0.1.6 Requires-Python >=3.9.0,<3.12; 0.1.7 Requires-Python >=3.9.0,<3.12; 1.21.2 Requires-Python >=3.7,<3.11; 1.21.3 Requires-Python >=3.7,<3.11; 1.21.4 Requires-Python >=3.7,<3.11; 1.21.5 Requires-Python >=3.7,<3.11; 1.21.6 Requires-Python >=3.7,<3.11; 2.10.0 Requires-Python >=3.6,<3.10; 2.11.0 Requires-Python >=3.6,<3.10; 2.12.0 Requires-Python >=3.6,<3.10; 2.13.0 Requires-Python >=3.6,<3.10; 2.13.1 Requires-Python >=3.6,<3.10; 2.14.0 Requires-Python >=3.6,<3.10; 2.15.0 Requires-Python >=3.6,<3.10; 2.16.0 Requires-Python >=3.6,<3.10; 2.16.1 Requires-Python >=3.6,<3.10; 2.17.0 Requires-Python >=3.6,<3.10; 2.18.0 Requires-Python >=3.6,<3.10; 2.19.0 Requires-Python >=3.6,<3.10; 2.20.0 Requires-Python 
+>=3.6,<3.10; 2.21.0 Requires-Python >=3.6,<3.10; 2.22.0 Requires-Python >=3.6,<3.10; 2.22.1 Requires-Python >=3.6,<3.10; 2.23.0 Requires-Python >=3.6,<3.10; 2.23.1 Requires-Python >=3.6,<3.10; 2.23.2 Requires-Python >=3.6,<3.10; 2.23.3 Requires-Python >=3.6,<3.10; 2.24.0 Requires-Python >=3.6,<3.10; 2.24.1 Requires-Python >=3.6,<3.10; 2.25.0 Requires-Python >=3.6,<3.10; 2.25.1 Requires-Python >=3.6,<3.10; 2.25.2 Requires-Python >=3.6,<3.10; 2.26.0 Requires-Python >=3.6,<3.10; 2.27.0 Requires-Python >=3.6,<3.10; 2.27.1 Requires-Python >=3.6,<3.10; 2.28.0 Requires-Python >=3.6,<3.10; 2.28.1 Requires-Python >=3.6,<3.10; 2.29.0 Requires-Python >=3.6,<3.10; 2.30.0 Requires-Python >=3.6,<3.11; 2.30.1 Requires-Python >=3.6,<3.11; 2.31.0 Requires-Python >=3.6,<3.11; 2.32.0 Requires-Python >=3.6,<3.11; 2.33.0 Requires-Python >=3.6,<3.11; 2.34.0 Requires-Python >=3.6,<3.11; 2.34.1 Requires-Python >=3.6,<3.11; 2.34.2 Requires-Python >=3.6,<3.11; 2.34.3 Requires-Python >=3.6,<3.11; 2.34.4 Requires-Python >=3.6,<3.11; 2.6.2 Requires-Python >=3.6,<3.9; 2.7.0 Requires-Python >=3.6,<3.10; 2.8.0 Requires-Python >=3.6,<3.10; 2.9.0 Requires-Python >=3.6,<3.10; 3.0.0 Requires-Python >=3.6,<3.11; 3.0.0b1 Requires-Python >=3.6,<3.11; 3.0.1 Requires-Python >=3.6,<3.11; 3.1.0 Requires-Python >=3.6,<3.11; 3.2.0 Requires-Python >=3.6,<3.11; 3.3.0 Requires-Python >=3.7,<3.11; 3.3.1 Requires-Python >=3.7,<3.11; 3.3.2 Requires-Python >=3.7,<3.11; 3.3.3 Requires-Python >=3.7,<3.11; 3.3.5 Requires-Python >=3.7,<3.11; 3.3.6 Requires-Python >=3.7,<3.11
+ERROR: Could not find a version that satisfies the requirement pgvector==0.4.5 (from versions: 0.1.0, 0.1.1, 0.1.2, 0.1.3, 0.1.4, 0.1.5, 0.1.6, 0.1.7, 0.1.8, 0.2.0, 0.2.1, 0.2.2, 0.2.3, 0.2.4, 0.2.5, 0.3.0, 0.3.1, 0.3.2, 0.3.3, 0.3.4, 0.3.5, 0.3.6, 0.4.0, 0.4.1)
+ERROR: No matching distribution found for pgvector==0.4.5
+PYTHONPATH=.;backend;backend\src
+Running unit tests only (service-heavy tests skipped). Use -All to include.
+Running pytest...
+
+============================================== ERRORS ============================================== 
+_____________________ ERROR collecting backend/src/tests/e2e/test_full_flow.py _____________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\src\tests\e2e\test_full_flow.py'. 
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\src\tests\e2e\test_full_flow.py:15: in <module>
+    from src.main import app
+backend\src\main.py:82: in <module>
+    from src.db.database import (
+backend\src\db\database.py:14: in <module>
+    from .models import Base, User, Conversation, Document
+backend\src\db\models.py:11: in <module>
+    from pgvector.sqlalchemy import Vector
+E   ModuleNotFoundError: No module named 'pgvector'
+__________________________ ERROR collecting backend/src/tests/test_api.py __________________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\src\tests\test_api.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\src\tests\test_api.py:3: in <module>
+    from backend.src.main import app
+backend\src\main.py:82: in <module>
+    from src.db.database import (
+backend\src\db\database.py:14: in <module>
+    from .models import Base, User, Conversation, Document
+backend\src\db\models.py:11: in <module>
+    from pgvector.sqlalchemy import Vector
+E   ModuleNotFoundError: No module named 'pgvector'
+______________ ERROR collecting backend/src/tests/test_chat_init_returns_trace_id.py _______________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\src\tests\test_chat_init_returns_trace_id.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/mnt/d/handywriterzai/backend/src/tests/test_chat_init_returns_trace_id.py:22: in <module>
+    ???
+backend\src\routes\chat_gateway.py:17: in <module>
+    from ..services.model_selector import get_model_selector, SelectionContext, SelectionStrategy    
+backend\src\services\model_selector.py:17: in <module>
+    from .model_policy import ModelPolicyRegistry, get_model_policy_registry, NodeCapabilityRequirement
+backend\src\services\model_policy.py:20: in <module>
+    from .gateway import ModelSpec, ModelCapability, ProviderType
+E   ImportError: cannot import name 'ModelSpec' from '<unknown module name>' (unknown location)      
+__________________ ERROR collecting backend/src/tests/test_memory_integration.py ___________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\src\tests\test_memory_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\src\tests\test_memory_integration.py:12: in <module>
+    from services.memory_integrator import get_memory_integrator
+backend\src\services\memory_integrator.py:15: in <module>
+    from ..db.database import get_db_manager
+E   ImportError: attempted relative import beyond top-level package
+___________________ ERROR collecting backend/src/tests/test_search_perplexity.py ___________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\src\tests\test_search_perplexity.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\src\tests\test_search_perplexity.py:3: in <module>
+    from agent.nodes.search_perplexity import PerplexitySearchAgent
+backend\src\agent\nodes\search_perplexity.py:17: in <module>
+    from ...agent.handywriterz_state import HandyWriterzState
+E   ImportError: attempted relative import beyond top-level package
+_______________________ ERROR collecting backend/src/tests/test_services.py ________________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\src\tests\test_services.py'.      
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\src\tests\test_services.py:3: in <module>
+    from backend.src.services.chunk_splitter import chunk_splitter
+backend\src\services\chunk_splitter.py:16: in <module>
+    import aiofiles
+E   ModuleNotFoundError: No module named 'aiofiles'
+_________________ ERROR collecting backend/src/tests/test_turnitin_idempotency.py __________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\src\tests\test_turnitin_idempotency.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\src\tests\test_turnitin_idempotency.py:6: in <module>
+    from backend.src.db.database import get_db_manager
+backend\src\db\database.py:14: in <module>
+    from .models import Base, User, Conversation, Document
+backend\src\db\models.py:11: in <module>
+    from pgvector.sqlalchemy import Vector
+E   ModuleNotFoundError: No module named 'pgvector'
+_____________________ ERROR collecting backend/src/tests/test_user_journey.py ______________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\src\tests\test_user_journey.py'.  
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\src\tests\test_user_journey.py:8: in <module>
+    from src.main import app
+backend\src\main.py:82: in <module>
+    from src.db.database import (
+backend\src\db\database.py:14: in <module>
+    from .models import Base, User, Conversation, Document
+backend\src\db\models.py:11: in <module>
+    from pgvector.sqlalchemy import Vector
+E   ModuleNotFoundError: No module named 'pgvector'
+________________________ ERROR collecting backend/src/tests/test_writer.py _________________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\src\tests\test_writer.py'.        
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\src\tests\test_writer.py:3: in <module>
+    from agent.nodes.writer import RevolutionaryWriterAgent
+backend\src\agent\nodes\writer.py:20: in <module>
+    from src.services.llm_service import get_llm_client
+backend\src\services\llm_service.py:5: in <module>
+    from langchain_anthropic import ChatAnthropic
+E   ModuleNotFoundError: No module named 'langchain_anthropic'
+______________ ERROR collecting backend/tests/integration/test_memory_integration.py _______________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\tests\integration\test_memory_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\tests\integration\test_memory_integration.py:8: in <module>
+    from backend.src.agent.nodes.memory_demo_agent import MemoryDemoAgent
+backend\src\agent\nodes\memory_demo_agent.py:5: in <module>
+    from ..base_agent import BaseAgent
+backend\src\agent\base_agent.py:5: in <module>
+    from ..handywriterz_state import HandyWriterzState
+E   ModuleNotFoundError: No module named 'backend.src.handywriterz_state'
+_________________ ERROR collecting backend/tests/integration/test_model_config.py __________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\tests\integration\test_model_config.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\tests\integration\test_model_config.py:9: in <module>
+    from backend.src.api.model_config import (
+backend\src\api\model_config.py:14: in <module>
+    from ..services.llm_service import get_all_llm_clients
+backend\src\services\llm_service.py:5: in <module>
+    from langchain_anthropic import ChatAnthropic
+E   ModuleNotFoundError: No module named 'langchain_anthropic'
+_______________ ERROR collecting backend/tests/integration/test_streaming_client.py ________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\tests\integration\test_streaming_client.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\tests\integration\test_streaming_client.py:11: in <module>
+    from backend.src.main import app
+backend\src\main.py:82: in <module>
+    from src.db.database import (
+backend\src\db\database.py:14: in <module>
+    from .models import Base, User, Conversation, Document
+backend\src\db\models.py:11: in <module>
+    from pgvector.sqlalchemy import Vector
+E   ModuleNotFoundError: No module named 'pgvector'
+________________ ERROR collecting backend/tests/test_chunk_splitter_integration.py _________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\tests\test_chunk_splitter_integration.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\tests\test_chunk_splitter_integration.py:7: in <module>
+    from src.services.chunk_splitter import ChunkSplitter, SplitConfig, SplitStrategy
+backend\src\services\chunk_splitter.py:16: in <module>
+    import aiofiles
+E   ModuleNotFoundError: No module named 'aiofiles'
+___________________ ERROR collecting backend/tests/test_dissertation_journey.py ____________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\tests\test_dissertation_journey.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\tests\test_dissertation_journey.py:6: in <module>
+    from src.agent.handywriterz_graph import handywriterz_graph
+backend\src\agent\handywriterz_graph.py:12: in <module>
+    from .nodes.user_intent import UserIntentNode
+backend\src\agent\nodes\user_intent.py:13: in <module>
+    from ..base_agent import BaseAgent
+backend\src\agent\base_agent.py:5: in <module>
+    from ..handywriterz_state import HandyWriterzState
+E   ModuleNotFoundError: No module named 'src.handywriterz_state'
+____________________________ ERROR collecting backend/tests/test_e2e.py ____________________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\tests\test_e2e.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\tests\test_e2e.py:6: in <module>
+    from main import app # Assuming your FastAPI app is in main.py
+    ^^^^^^^^^^^^^^^^^^^^
+backend\src\main.py:82: in <module>
+    from src.db.database import (
+backend\src\db\database.py:14: in <module>
+    from .models import Base, User, Conversation, Document
+backend\src\db\models.py:11: in <module>
+    from pgvector.sqlalchemy import Vector
+E   ModuleNotFoundError: No module named 'pgvector'
+______________________ ERROR collecting backend/tests/test_evidence_guard.py _______________________ 
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1387: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:935: in _load_unlocked
+    ???
+backend_env\Lib\site-packages\_pytest\assertion\rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+backend\tests\test_evidence_guard.py:9: in <module>
+    with patch('agent.nodes.master_orchestrator.MasterOrchestratorAgent._initialize_ai_providers'):  
+C:\Python312\Lib\unittest\mock.py:1442: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+C:\Python312\Lib\pkgutil.py:528: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'agent.nodes' has no attribute 'master_orchestrator'
+__________________________ ERROR collecting backend/tests/test_health.py ___________________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\tests\test_health.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\tests\test_health.py:3: in <module>
+    from backend.src.main import app
+backend\src\main.py:82: in <module>
+    from src.db.database import (
+backend\src\db\database.py:14: in <module>
+    from .models import Base, User, Conversation, Document
+backend\src\db\models.py:11: in <module>
+    from pgvector.sqlalchemy import Vector
+E   ModuleNotFoundError: No module named 'pgvector'
+_______________________ ERROR collecting backend/tests/test_memory_writer.py _______________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\tests\test_memory_writer.py'.     
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\tests\test_memory_writer.py:5: in <module>
+    from agent.nodes.memory_writer import MemoryWriter
+backend\src\agent\nodes\memory_writer.py:10: in <module>
+    from ...services.memory_integrator import get_memory_integrator
+E   ImportError: attempted relative import beyond top-level package
+__________________________ ERROR collecting backend/tests/test_routing.py __________________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\tests\test_routing.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\tests\test_routing.py:2: in <module>
+    from agent.nodes.loader import load_graph   # helper that reads YAML → Graph
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\src\agent\nodes\loader.py:2: in <module>
+    from langgraph.graph import Graph
+E   ImportError: cannot import name 'Graph' from 'langgraph.graph' (d:\HandyWriterzAi\backend_env\Lib\site-packages\langgraph\graph\__init__.py). Did you mean: 'graph'?
+___________________________ ERROR collecting backend/tests/test_utils.py ___________________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\tests\test_utils.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\tests\test_utils.py:5: in <module>
+    from utils.chartify import create_chart_svg
+backend\src\utils\chartify.py:2: in <module>
+    from playwright.async_api import async_playwright
+E   ModuleNotFoundError: No module named 'playwright'
+_______________________ ERROR collecting backend/tests/test_voice_upload.py ________________________ 
+ImportError while importing test module 'D:\HandyWriterzAi\backend\tests\test_voice_upload.py'.      
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend\tests\test_voice_upload.py:8: in <module>
+    from main import app
+backend\src\main.py:82: in <module>
+    from src.db.database import (
+backend\src\db\database.py:14: in <module>
+    from .models import Base, User, Conversation, Document
+backend\src\db\models.py:11: in <module>
+    from pgvector.sqlalchemy import Vector
+E   ModuleNotFoundError: No module named 'pgvector'
+========================================= warnings summary ========================================= 
+backend_env\Lib\site-packages\pydantic\fields.py:1093: 64 warnings
+  d:\HandyWriterzAi\backend_env\Lib\site-packages\pydantic\fields.py:1093: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` 
+instead. (Extra keys: 'env'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warn(
+
+backend_env\Lib\site-packages\pydantic\_internal\_config.py:323
+  d:\HandyWriterzAi\backend_env\Lib\site-packages\pydantic\_internal\_config.py:323: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+backend\src\services\prompt_orchestrator.py:161
+  D:\HandyWriterzAi\backend\src\services\prompt_orchestrator.py:161: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/        
+    @validator('use_cases')
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+===================================== short test summary info ======================================
+ERROR backend/src/tests/e2e/test_full_flow.py
+ERROR backend/src/tests/test_api.py
+ERROR backend/src/tests/test_chat_init_returns_trace_id.py
+ERROR backend/src/tests/test_memory_integration.py
+ERROR backend/src/tests/test_search_perplexity.py
+ERROR backend/src/tests/test_services.py
+ERROR backend/src/tests/test_turnitin_idempotency.py
+ERROR backend/src/tests/test_user_journey.py
+ERROR backend/src/tests/test_writer.py
+ERROR backend/tests/integration/test_memory_integration.py
+ERROR backend/tests/integration/test_model_config.py
+ERROR backend/tests/integration/test_streaming_client.py
+ERROR backend/tests/test_chunk_splitter_integration.py
+ERROR backend/tests/test_dissertation_journey.py
+ERROR backend/tests/test_e2e.py
+ERROR backend/tests/test_evidence_guard.py - AttributeError: module 'agent.nodes' has no attribute 'master_orchestrator'
+ERROR backend/tests/test_health.py
+ERROR backend/tests/test_memory_writer.py
+ERROR backend/tests/test_routing.py
+ERROR backend/tests/test_utils.py
+ERROR backend/tests/test_voice_upload.py
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Interrupted: 21 errors during collection !!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+(.venv) PS D:\HandyWriterzAi> 

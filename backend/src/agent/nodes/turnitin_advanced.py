@@ -17,6 +17,8 @@ import docx
 
 from ..base import BaseNode
 from ..handywriterz_state import HandyWriterzState
+from src.agent.sse_unified import EventType, Phase
+from src.services.sse_service import get_sse_service  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +84,7 @@ class ComprehensiveTurnitinReport:
     submission_id: str
     submission_timestamp: datetime
     processing_duration: float
-    
+
     # Similarity analysis
     overall_similarity_score: float
     text_similarity: float
@@ -91,35 +93,35 @@ class ComprehensiveTurnitinReport:
     internet_sources_percentage: float
     academic_sources_percentage: float
     student_papers_percentage: float
-    
+
     # Detailed fragment analysis
     plagiarism_fragments: List[PlagiarismFragment]
     fragment_severity_distribution: Dict[PlagiarismSeverity, int]
-    
+
     # AI detection results
     ai_detection_analysis: AIDetectionAnalysis
-    
+
     # Source analysis
     top_sources: List[Dict[str, Any]]
     source_credibility_analysis: Dict[str, float]
     citation_gap_analysis: List[Dict[str, Any]]
-    
+
     # Quality metrics
     originality_score: float
     academic_integrity_score: float
     citation_quality_score: float
-    
+
     # Revision recommendations
     revision_priority: str  # "critical", "high", "moderate", "low"
     targeted_revisions: List[Dict[str, Any]]
     estimated_revision_time: int  # minutes
     revision_strategy_recommendations: List[RevisionStrategy]
-    
+
     # Automated improvement suggestions
     automated_paraphrasing_suggestions: Dict[str, List[str]]
     citation_enhancement_suggestions: List[Dict[str, Any]]
     structural_improvement_recommendations: List[str]
-    
+
     # Success probability
     success_probability_next_attempt: float
     estimated_attempts_to_success: int
@@ -129,7 +131,7 @@ class ComprehensiveTurnitinReport:
 class RevolutionaryTurnitinAgent(BaseNode):
     """
     Revolutionary Turnitin Integration with Advanced Academic Integrity Intelligence.
-    
+
     Revolutionary Capabilities:
     - Multi-dimensional plagiarism analysis with fragment-level intelligence
     - Advanced AI content detection with humanization strategies
@@ -140,102 +142,176 @@ class RevolutionaryTurnitinAgent(BaseNode):
     - Academic integrity coaching and guidance
     - Sophisticated paraphrasing and originality enhancement
     """
-    
+
     def __init__(self):
         super().__init__("revolutionary_turnitin_agent")
 
     async def execute(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """Execute the node logic by calling the main __call__ method."""
         return await self(state, config)
-        
+
         # Turnitin API configuration
         self.turnitin_api_key = os.getenv("TURNITIN_API_KEY")
         self.turnitin_endpoint = os.getenv("TURNITIN_ENDPOINT", "https://api.turnitin.com/v1")
-        
+
         # Advanced configuration
         self.target_similarity_threshold = 8.0  # Strict <8% target
         self.ai_detection_threshold = 5.0  # <5% AI detection target
         self.max_revision_cycles = 5
         self.minimum_improvement_threshold = 3.0  # Minimum 3% improvement per cycle
-        
+
         # Sophisticated analysis engines
         self.plagiarism_analyzer = self._initialize_plagiarism_analyzer()
         self.ai_detection_engine = self._initialize_ai_detection()
         self.revision_optimizer = self._initialize_revision_optimizer()
         self.citation_enhancer = self._initialize_citation_enhancer()
         self.paraphrasing_engine = self._initialize_paraphrasing_engine()
-        
+
         # Learning and optimization systems
         self.revision_success_patterns = {}
         self.similarity_reduction_models = {}
         self.student_progress_tracking = {}
-        
+
     async def __call__(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
-        """Execute revolutionary Turnitin analysis with automated excellence achievement."""
+        """Execute revolutionary Turnitin analysis with automated excellence achievement and HITL Workbench integration."""
         try:
             await self.broadcast_progress(state, "turnitin_advanced", "starting", 0,
                                         "Initializing advanced academic integrity analysis...")
-            
+
             # Extract content and context
             current_draft = state.get("current_draft", "")
             user_params = state.get("user_params", {})
             revision_count = state.get("revision_count", 0)
-            
+            conversation_id = state.get("conversation_id")
+            tenant_id = user_params.get("tenant_id")
+            user_id = user_params.get("user_id")
+            title = user_params.get("title", "AI Writeup Review")
+
             if not current_draft:
                 return {"turnitin_passed": False, "error": "No content to analyze"}
-            
+
             # Check revision cycle limits
             if revision_count >= self.max_revision_cycles:
                 return await self._handle_max_revisions_reached(state, revision_count)
-            
+
             await self.broadcast_progress(state, "turnitin_advanced", "in_progress", 10,
                                         "Converting to optimal document format...")
-            
+
             # Convert to optimal format for analysis
             document_content = await self._prepare_document_for_analysis(current_draft, user_params)
-            
+
             await self.broadcast_progress(state, "turnitin_advanced", "in_progress", 25,
                                         "Submitting to Turnitin with advanced parameters...")
-            
+
             # Submit with sophisticated parameters
             submission_result = await self._submit_with_advanced_parameters(document_content, user_params)
-            
+
             if not submission_result:
                 return {"turnitin_passed": False, "error": "Submission failed"}
-            
+
             await self.broadcast_progress(state, "turnitin_advanced", "in_progress", 40,
                                         "Monitoring analysis progress...")
-            
+
             # Advanced monitoring with real-time updates
             analysis_result = await self._monitor_analysis_with_updates(submission_result["submission_id"])
-            
+
             if not analysis_result:
                 return {"turnitin_passed": False, "error": "Analysis failed or timed out"}
-            
+
             await self.broadcast_progress(state, "turnitin_advanced", "in_progress", 70,
                                         "Performing comprehensive similarity analysis...")
-            
+
             # Perform comprehensive analysis
             comprehensive_report = await self._perform_comprehensive_analysis(analysis_result, current_draft)
-            
+
             await self.broadcast_progress(state, "turnitin_advanced", "in_progress", 85,
                                         "Generating intelligent revision strategy...")
-            
+
             # Generate sophisticated revision strategy
             revision_strategy = await self._generate_intelligent_revision_strategy(comprehensive_report, user_params)
-            
+
+            # --- HITL Workbench Integration ---
+            # Import here to avoid circular imports
+            from src.services.workbench_service import WorkbenchService
+            from src.db.repositories.workbench_assignment_repo import WorkbenchAssignmentRepository
+            from src.db.repositories.workbench_artifact_repo import WorkbenchArtifactRepository
+            from src.db.repositories.workbench_submission_repo import WorkbenchSubmissionRepository
+            from src.db.repositories.workbench_section_status_repo import WorkbenchSectionStatusRepository
+            from src.db.models import WorkbenchArtifactType
+            from src.api.schemas.workbench import ReportPayload, ModifiedDocPayload
+            from sqlalchemy.orm import Session
+
+            # Get DB session (assume available in config or state)
+            db: Session = config.get("db") if config else None
+            if not db:
+                logger.error("No DB session provided for Workbench integration.")
+                await self.broadcast_progress(state, "turnitin_advanced", "failed", 0,
+                                              "No DB session for Workbench assignment.")
+                return {"turnitin_passed": False, "error": "No DB session for Workbench assignment."}
+
+            # Initialize service
+            workbench_service = WorkbenchService(
+                WorkbenchAssignmentRepository(db),
+                WorkbenchSubmissionRepository(db),
+                WorkbenchArtifactRepository(db),
+                WorkbenchSectionStatusRepository(db)
+            )
+
+            # Create assignment for human review
+            assignment = workbench_service.create_assignment(
+                db=db,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                title=title,
+                requirements={
+                    "min_similarity_score": 0.0,
+                    "max_similarity_score": self.target_similarity_threshold,
+                    "expected_ai_score": self.ai_detection_threshold
+                },
+                delivery_channel="workbench",
+                source_conversation_id=conversation_id,
+                ai_metadata={"turnitin_report": asdict(comprehensive_report)}
+            )
+
+            # Upload artifacts: write-up DOCX and Turnitin report (simulate URLs)
+            docx_url = f"s3://workbench/{assignment.id}/writeup.docx"
+            report_url = f"s3://workbench/{assignment.id}/turnitin_report.pdf"
+            # In real code, upload files and get URLs
+
+            workbench_service.artifact_repo.create(
+                assignment_id=assignment.id,
+                submission_id=None,
+                artifact_type=WorkbenchArtifactType.MODIFIED_DOCX,
+                storage_provider="s3",
+                object_key=docx_url,
+                mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                metadata={"title": title}
+            )
+            workbench_service.artifact_repo.create(
+                assignment_id=assignment.id,
+                submission_id=None,
+                artifact_type=WorkbenchArtifactType.SIMILARITY_REPORT_PDF,
+                storage_provider="s3",
+                object_key=report_url,
+                mime_type="application/pdf",
+                metadata={"similarity_score": comprehensive_report.overall_similarity_score}
+            )
+
+            await self.broadcast_progress(state, "turnitin_advanced", "hitl_assignment_created", 90,
+                                          f"Assignment {assignment.id} created for human review in Workbench.")
+
             # Determine success
             similarity_passed = comprehensive_report.overall_similarity_score <= self.target_similarity_threshold
             ai_passed = comprehensive_report.ai_detection_analysis.overall_ai_probability <= self.ai_detection_threshold
             overall_passed = similarity_passed and ai_passed
-            
+
             if overall_passed:
                 await self.broadcast_progress(state, "turnitin_advanced", "completed", 100,
                                             f"Excellence achieved! Similarity: {comprehensive_report.overall_similarity_score:.1f}%, AI: {comprehensive_report.ai_detection_analysis.overall_ai_probability:.1f}%")
             else:
                 await self.broadcast_progress(state, "turnitin_advanced", "completed", 100,
                                             f"Analysis complete. Similarity: {comprehensive_report.overall_similarity_score:.1f}%, AI: {comprehensive_report.ai_detection_analysis.overall_ai_probability:.1f}%")
-            
+
             return {
                 "turnitin_passed": overall_passed,
                 "similarity_passed": similarity_passed,
@@ -252,26 +328,29 @@ class RevolutionaryTurnitinAgent(BaseNode):
                     "paraphrasing": comprehensive_report.automated_paraphrasing_suggestions,
                     "citations": comprehensive_report.citation_enhancement_suggestions,
                     "structure": comprehensive_report.structural_improvement_recommendations
-                }
+                },
+                "workbench_assignment_id": str(assignment.id),
+                "workbench_assignment_status": assignment.status.value,
+                "workbench_assignment_url": f"/workbench/assignments/{assignment.id}"
             }
-            
+
         except Exception as e:
             logger.error(f"Revolutionary Turnitin analysis failed: {e}")
             await self.broadcast_progress(state, "turnitin_advanced", "failed", 0,
                                         f"Advanced analysis failed: {str(e)}")
             return {"turnitin_passed": False, "error": str(e)}
-    
+
     async def _prepare_document_for_analysis(self, content: str, user_params: Dict[str, Any]) -> bytes:
         """Prepare document in optimal format for Turnitin analysis."""
         try:
             # Create sophisticated DOCX with proper formatting
             doc = docx.Document()
-            
+
             # Add document properties
             doc.core_properties.title = f"{user_params.get('writeupType', 'Academic Paper')} - {user_params.get('field', 'General')}"
             doc.core_properties.author = "Student"
             doc.core_properties.subject = user_params.get('field', 'Academic Writing')
-            
+
             # Add content with proper formatting
             paragraphs = content.split('\n\n')
             for paragraph in paragraphs:
@@ -289,33 +368,33 @@ class RevolutionaryTurnitinAgent(BaseNode):
                     else:
                         # Regular paragraph
                         p.add_run(paragraph.strip())
-            
+
             # Save to bytes
             temp_path = tempfile.mktemp(suffix='.docx')
             doc.save(temp_path)
-            
+
             with open(temp_path, 'rb') as f:
                 docx_content = f.read()
-            
+
             os.unlink(temp_path)
             return docx_content
-            
+
         except Exception as e:
             logger.error(f"Document preparation failed: {e}")
             # Fallback to plain text
             return content.encode('utf-8')
-    
-    async def _submit_with_advanced_parameters(self, document_content: bytes, 
+
+    async def _submit_with_advanced_parameters(self, document_content: bytes,
                                              user_params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Submit document with advanced Turnitin parameters."""
         try:
             if not self.turnitin_api_key:
                 logger.warning("Turnitin API key not configured, using advanced simulation")
                 return await self._simulate_advanced_submission(document_content, user_params)
-            
+
             # Real Turnitin API submission with advanced parameters
             async with aiohttp.ClientSession() as session:
-                
+
                 # Prepare sophisticated submission data
                 submission_data = {
                     'owner': user_params.get('user_id', 'student'),
@@ -323,7 +402,7 @@ class RevolutionaryTurnitinAgent(BaseNode):
                     'submitter': user_params.get('user_id', 'student'),
                     'filename': f"academic_paper_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
                     'content_type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                    
+
                     # Advanced Turnitin settings
                     'settings': {
                         'grammar_check': True,
@@ -345,25 +424,25 @@ class RevolutionaryTurnitinAgent(BaseNode):
                         }
                     }
                 }
-                
+
                 # Create multipart form data
                 form_data = aiohttp.FormData()
                 form_data.add_field('data', json.dumps(submission_data), content_type='application/json')
-                form_data.add_field('file', document_content, 
+                form_data.add_field('file', document_content,
                                   filename=submission_data['filename'],
                                   content_type=submission_data['content_type'])
-                
+
                 headers = {
                     'Authorization': f'Bearer {self.turnitin_api_key}',
                     'Accept': 'application/json'
                 }
-                
+
                 async with session.post(
                     f"{self.turnitin_endpoint}/submissions",
                     data=form_data,
                     headers=headers
                 ) as response:
-                    
+
                     if response.status == 201:
                         result = await response.json()
                         return {
@@ -376,85 +455,85 @@ class RevolutionaryTurnitinAgent(BaseNode):
                         error_text = await response.text()
                         logger.error(f"Error details: {error_text}")
                         return None
-                        
+
         except Exception as e:
             logger.error(f"Advanced Turnitin submission error: {e}")
             # Fallback to simulation
             return await self._simulate_advanced_submission(document_content, user_params)
-    
-    async def _simulate_advanced_submission(self, document_content: bytes, 
+
+    async def _simulate_advanced_submission(self, document_content: bytes,
                                           user_params: Dict[str, Any]) -> Dict[str, Any]:
         """Simulate advanced Turnitin submission for development."""
         # Create realistic submission ID
         content_hash = hashlib.md5(document_content).hexdigest()[:8]
         submission_id = f"sim_{content_hash}_{int(datetime.now().timestamp())}"
-        
+
         return {
             "submission_id": submission_id,
             "status": "submitted",
             "expected_completion": datetime.now() + timedelta(seconds=30),
             "simulation": True
         }
-    
+
     async def _monitor_analysis_with_updates(self, submission_id: str) -> Optional[Dict[str, Any]]:
         """Monitor analysis progress with real-time updates."""
         max_wait_time = 20 * 60  # 20 minutes maximum
         poll_interval = 15  # 15 seconds
         start_time = datetime.now()
-        
+
         while (datetime.now() - start_time).seconds < max_wait_time:
             try:
                 if submission_id.startswith("sim_"):
                     # Simulation mode
                     await asyncio.sleep(3)  # Simulate processing time
                     return await self._generate_sophisticated_simulation_result(submission_id)
-                
+
                 # Real API polling
                 async with aiohttp.ClientSession() as session:
                     headers = {
                         'Authorization': f'Bearer {self.turnitin_api_key}',
                         'Accept': 'application/json'
                     }
-                    
+
                     async with session.get(
                         f"{self.turnitin_endpoint}/submissions/{submission_id}/similarity",
                         headers=headers
                     ) as response:
-                        
+
                         if response.status == 200:
                             result = await response.json()
                             if result.get("status") in ["complete", "processed"]:
                                 return result
-                            
+
                         elif response.status == 404:
                             # Still processing
                             await asyncio.sleep(poll_interval)
                             continue
-                            
+
                         else:
                             logger.error(f"Turnitin polling error: {response.status}")
                             await asyncio.sleep(poll_interval)
                             continue
-                
+
             except Exception as e:
                 logger.error(f"Monitoring error: {e}")
                 await asyncio.sleep(poll_interval)
-        
+
         logger.error("Turnitin analysis monitoring timed out")
         return None
-    
+
     async def _generate_sophisticated_simulation_result(self, submission_id: str) -> Dict[str, Any]:
         """Generate sophisticated simulation result for development."""
         import random
-        
+
         # Generate realistic but controllable results
         base_similarity = random.uniform(12.0, 28.0)
         ai_probability = random.uniform(8.0, 25.0)
-        
+
         # Create realistic fragments
         fragments = []
         num_fragments = random.randint(3, 8)
-        
+
         for i in range(num_fragments):
             fragments.append({
                 "start": random.randint(100, 2000),
@@ -467,7 +546,7 @@ class RevolutionaryTurnitinAgent(BaseNode):
                     "type": random.choice(["journal", "website", "book"])
                 }
             })
-        
+
         return {
             "submission_id": submission_id,
             "status": "complete",
@@ -497,42 +576,42 @@ class RevolutionaryTurnitinAgent(BaseNode):
                 "analysis_timestamp": datetime.now().isoformat()
             }
         }
-    
-    async def _perform_comprehensive_analysis(self, turnitin_result: Dict[str, Any], 
+
+    async def _perform_comprehensive_analysis(self, turnitin_result: Dict[str, Any],
                                             original_content: str) -> ComprehensiveTurnitinReport:
         """Perform comprehensive analysis of Turnitin results."""
-        
+
         # Extract core metrics
         similarity_data = turnitin_result.get("similarity", {})
         ai_data = turnitin_result.get("ai_detection", {})
         fragments_data = turnitin_result.get("fragments", [])
         sources_data = turnitin_result.get("sources", [])
-        
+
         # Analyze plagiarism fragments
         plagiarism_fragments = []
         for fragment in fragments_data:
             analyzed_fragment = await self._analyze_plagiarism_fragment(fragment, original_content)
             plagiarism_fragments.append(analyzed_fragment)
-        
+
         # Perform AI detection analysis
         ai_analysis = await self._analyze_ai_detection(ai_data, original_content)
-        
+
         # Calculate quality scores
         originality_score = 100 - similarity_data.get("overall", 0)
         academic_integrity_score = self._calculate_academic_integrity_score(similarity_data, ai_data)
         citation_quality_score = await self._assess_citation_quality(original_content, sources_data)
-        
+
         # Generate revision recommendations
         revision_strategy = await self._generate_revision_strategy(plagiarism_fragments, ai_analysis)
-        
+
         # Predict success probability
         success_probability = await self._predict_revision_success(similarity_data, ai_data, plagiarism_fragments)
-        
+
         return ComprehensiveTurnitinReport(
             submission_id=turnitin_result.get("submission_id", ""),
             submission_timestamp=datetime.now(),
             processing_duration=turnitin_result.get("metadata", {}).get("processing_time", 0),
-            
+
             # Similarity metrics
             overall_similarity_score=similarity_data.get("overall", 0),
             text_similarity=similarity_data.get("overall", 0),
@@ -541,56 +620,56 @@ class RevolutionaryTurnitinAgent(BaseNode):
             internet_sources_percentage=similarity_data.get("internet", 0),
             academic_sources_percentage=similarity_data.get("publications", 0),
             student_papers_percentage=similarity_data.get("student_papers", 0),
-            
+
             # Fragment analysis
             plagiarism_fragments=plagiarism_fragments,
             fragment_severity_distribution=self._analyze_fragment_severity(plagiarism_fragments),
-            
+
             # AI detection
             ai_detection_analysis=ai_analysis,
-            
+
             # Source analysis
             top_sources=sources_data,
             source_credibility_analysis=await self._analyze_source_credibility(sources_data),
             citation_gap_analysis=await self._analyze_citation_gaps(original_content, sources_data),
-            
+
             # Quality scores
             originality_score=originality_score,
             academic_integrity_score=academic_integrity_score,
             citation_quality_score=citation_quality_score,
-            
+
             # Revision strategy
             revision_priority=revision_strategy["priority"],
             targeted_revisions=revision_strategy["revisions"],
             estimated_revision_time=revision_strategy["estimated_time"],
             revision_strategy_recommendations=revision_strategy["strategies"],
-            
+
             # Automated improvements
             automated_paraphrasing_suggestions=await self._generate_paraphrasing_suggestions(plagiarism_fragments),
             citation_enhancement_suggestions=await self._generate_citation_enhancements(original_content, sources_data),
             structural_improvement_recommendations=await self._generate_structural_improvements(original_content),
-            
+
             # Success prediction
             success_probability_next_attempt=success_probability["probability"],
             estimated_attempts_to_success=success_probability["estimated_attempts"],
             confidence_interval=success_probability["confidence_interval"]
         )
-    
+
     # Additional sophisticated helper methods would continue here...
     # For brevity, I'll include key method signatures
-    
+
     async def _analyze_plagiarism_fragment(self, fragment: Dict[str, Any], content: str) -> PlagiarismFragment:
         """Analyze individual plagiarism fragment with sophisticated intelligence."""
-        
+
         try:
             start_pos = fragment.get('start', 0)
             end_pos = fragment.get('end', len(content))
             similarity = fragment.get('similarity', 0.0)
             source_info = fragment.get('source', {})
-            
+
             # Extract flagged text
             flagged_text = content[start_pos:end_pos] if start_pos < len(content) else fragment.get('text', '')
-            
+
             # Determine severity level
             if similarity >= 95:
                 severity = PlagiarismSeverity.CRITICAL
@@ -602,10 +681,10 @@ class RevolutionaryTurnitinAgent(BaseNode):
                 severity = PlagiarismSeverity.LOW
             else:
                 severity = PlagiarismSeverity.MINIMAL
-            
+
             # Generate paraphrasing suggestions
             suggestions = await self._generate_paraphrasing_suggestions_for_fragment(flagged_text)
-            
+
             return PlagiarismFragment(
                 start_position=start_pos,
                 end_position=end_pos,
@@ -626,45 +705,45 @@ class RevolutionaryTurnitinAgent(BaseNode):
                     'position_in_document': start_pos / len(content) if content else 0
                 }
             )
-            
+
         except Exception as e:
             logger.error(f"Fragment analysis failed: {e}")
             return self._create_default_fragment(fragment)
-    
+
     async def _analyze_ai_detection(self, ai_data: Dict[str, Any], content: str) -> AIDetectionAnalysis:
         """Perform comprehensive AI detection analysis."""
-        
+
         try:
             overall_probability = ai_data.get('probability', 0.0)
             confidence = ai_data.get('confidence', 0.8)
-            
+
             # Analyze content structure for AI markers
             sentences = [s.strip() for s in content.split('.') if s.strip()]
             paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
-            
+
             # Calculate sentence-level scores (simplified)
             sentence_scores = []
             for sentence in sentences:
                 # Simple heuristics for AI detection
                 score = self._calculate_sentence_ai_probability(sentence)
                 sentence_scores.append(score)
-            
+
             # Calculate paragraph-level scores
             paragraph_scores = []
             for paragraph in paragraphs:
                 score = self._calculate_paragraph_ai_probability(paragraph)
                 paragraph_scores.append(score)
-            
+
             # Analyze linguistic patterns
             linguistic_patterns = self._analyze_linguistic_patterns(content)
-            
+
             # Identify human vs AI markers
             human_markers = self._identify_human_markers(content)
             ai_markers = self._identify_ai_markers(content)
-            
+
             # Generate humanization recommendations
             humanization_recommendations = await self._generate_humanization_recommendations(content, ai_markers)
-            
+
             return AIDetectionAnalysis(
                 overall_ai_probability=overall_probability,
                 sentence_level_scores=sentence_scores,
@@ -678,11 +757,11 @@ class RevolutionaryTurnitinAgent(BaseNode):
                 confidence_assessment=confidence,
                 humanization_recommendations=humanization_recommendations
             )
-            
+
         except Exception as e:
             logger.error(f"AI detection analysis failed: {e}")
             return self._create_default_ai_analysis()
-    
+
     def _calculate_academic_integrity_score(self, similarity: Dict[str, Any], ai_data: Dict[str, Any]) -> float:
         """Calculate comprehensive academic integrity score."""
         similarity_score = max(0, 100 - similarity.get("overall", 0))
@@ -692,3 +771,15 @@ class RevolutionaryTurnitinAgent(BaseNode):
 
 # Create singleton instance
 revolutionary_turnitin_node = RevolutionaryTurnitinAgent()
+
+_sse_service = get_sse_service()
+
+async def broadcast_progress(self, state: HandyWriterzState, node_name: str, stage: str, progress: float, message: str, error: bool = False):
+        conversation_id = state.get("conversation_id")
+        event_type = "error" if error else "progress"
+        if conversation_id:
+            await _sse_service.publish_event(
+                conversation_id,
+                event_type,
+                {"node": node_name, "phase": "evaluation", "stage": stage, "progress": progress, "message": message}
+            )

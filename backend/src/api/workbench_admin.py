@@ -78,10 +78,9 @@ def hash_email_for_lookup(email: str) -> str:
     return hashlib.sha256(email.encode()).hexdigest()
 
 @router.post("/users", response_model=WorkbenchUserResponse, status_code=status.HTTP_201_CREATED)
-@require_authorization(["admin"])
 async def create_workbench_user(
     request: CreateWorkbenchUserRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(require_authorization(["admin"])),
     db: Session = Depends(get_db)
 ):
     """
@@ -169,9 +168,8 @@ async def create_workbench_user(
         )
 
 @router.get("/users", response_model=List[WorkbenchUserResponse])
-@require_authorization(["admin"])
 async def list_workbench_users(
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(require_authorization(["admin"])),
     db: Session = Depends(get_db),
     skip: int = 0,
     limit: int = 100
@@ -209,10 +207,9 @@ async def list_workbench_users(
         )
 
 @router.get("/users/{user_id}", response_model=WorkbenchUserResponse)
-@require_authorization(["admin"])
 async def get_workbench_user(
     user_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(require_authorization(["admin"])),
     db: Session = Depends(get_db)
 ):
     """Get a specific workbench user by ID."""
@@ -254,11 +251,10 @@ async def get_workbench_user(
         )
 
 @router.put("/users/{user_id}", response_model=WorkbenchUserResponse)
-@require_authorization(["admin"])
 async def update_workbench_user(
     user_id: str,
     request: UpdateWorkbenchUserRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(require_authorization(["admin"])),
     db: Session = Depends(get_db)
 ):
     """Update a workbench user. Only admins can update users."""
@@ -321,10 +317,9 @@ async def update_workbench_user(
         )
 
 @router.delete("/users/{user_id}")
-@require_authorization(["admin"])
 async def delete_workbench_user(
     user_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(require_authorization(["admin"])),
     db: Session = Depends(get_db)
 ):
     """Delete a workbench user. Only admins can delete users."""

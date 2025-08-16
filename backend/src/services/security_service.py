@@ -82,7 +82,13 @@ class RevolutionarySecurityService:
         encryption_key = os.getenv("ENCRYPTION_KEY")
         if not encryption_key:
             encryption_key = Fernet.generate_key()
-            logger.warning("No ENCRYPTION_KEY found, generated temporary key")
+            env = (os.getenv("ENV") or os.getenv("APP_ENV") or os.getenv("PYTHON_ENV") or "development").lower()
+            # Lower severity in local/dev to reduce noise
+            msg = "No ENCRYPTION_KEY found; generated ephemeral key for this process"
+            if env in ("prod", "production"):
+                logger.warning(msg)
+            else:
+                logger.info(msg)
         
         self.cipher = Fernet(encryption_key.encode() if isinstance(encryption_key, str) else encryption_key)
         
@@ -434,6 +440,7 @@ class RevolutionarySecurityService:
 
 # Authentication dependency
 security_scheme = HTTPBearer()
+optional_security_scheme = HTTPBearer(auto_error=False)
 security_service = RevolutionarySecurityService()
 
 
@@ -442,15 +449,67 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     return await security_service.validate_jwt_token(credentials)
 
 
-async def require_authorization(action: str):
-    """Dependency for requiring specific authorization."""
+async def get_optional_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security_scheme),
+) -> Dict[str, Any]:
+    """Get current user if Authorization is provided; otherwise return anonymous.
+
+    Also accepts an optional 'X-User-Id' header for lightweight identification in dev.
+    """
+    try:
+        if credentials is not None:
+            return await security_service.validate_jwt_token(credentials)
+    except HTTPException:
+        # Invalid token → treat as anonymous rather than failing hard for optional paths
+        pass
+
+    # Fallback: accept X-User-Id header for non-auth flows
+    try:
+        x_uid = request.headers.get('x-user-id') or request.headers.get('X-User-Id')
+        if x_uid:
+            return {"user_id": x_uid}
+    except Exception:
+        pass
+
+    return {"user_id": "anonymous"}
+
+
+from typing import Union, List
+
+def require_authorization(action: Union[str, List[str]]):
+    """Dependency for requiring specific authorization.
+
+    Accepts a single action string or a list of actions (any-of semantics).
+    Usage:
+      current_user: Dict[str, Any] = Depends(require_authorization("admin"))
+      current_user: Dict[str, Any] = Depends(require_authorization(["checker", "admin"]))
+    """
     async def check_auth(user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
-        if not await security_service.check_user_authorization(user, action):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Insufficient permissions for {action}"
-            )
-        return user
+        try:
+            if isinstance(action, list):
+                allowed = False
+                for a in action:
+                    if await security_service.check_user_authorization(user, a):
+                        allowed = True
+                        break
+                if not allowed:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Insufficient permissions; requires one of: {', '.join(map(str, action))}"
+                    )
+            else:
+                if not await security_service.check_user_authorization(user, action):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Insufficient permissions for {action}"
+                    )
+            return user
+        except HTTPException:
+            raise
+        except Exception as e:
+            # Fail closed on unexpected errors
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Authorization error: {e}")
     return check_auth
 
 

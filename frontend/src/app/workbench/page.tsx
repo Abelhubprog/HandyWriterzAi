@@ -9,15 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  Download, 
-  Upload, 
-  Eye, 
-  Clock, 
-  FileText, 
-  CheckCircle, 
-  XCircle, 
-  AlertCircle, 
+import {
+  Download,
+  Upload,
+  Eye,
+  Clock,
+  FileText,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
   Search,
   Filter,
   Star,
@@ -32,7 +32,8 @@ import {
 import { toast } from '@/components/ui/use-toast';
 import { useWorkbenchAuth, withWorkbenchAuth } from '@/contexts/WorkbenchAuthContext';
 import { useRouter } from 'next/navigation';
-import { workbenchAPI, WorkbenchDocument } from '@/services/workbench-api';
+import { workbenchAPI, WorkbenchDocument, WorkbenchAssignment } from '@/services/workbench-api';
+import { AssignmentCard } from '@/components/workbench/AssignmentCard';
 
 export default withWorkbenchAuth(function WorkbenchPage() {
   const { user, logout, hasPermission, isAdmin } = useWorkbenchAuth();
@@ -57,6 +58,9 @@ export default withWorkbenchAuth(function WorkbenchPage() {
     plagiarismReport: File | null;
     aiReport: File | null;
   }>({ plagiarismReport: null, aiReport: null });
+  const [assignments, setAssignments] = useState<WorkbenchAssignment[]>([]);
+  const [isLoadingAssignments, setIsLoadingAssignments] = useState(true);
+  const [selectedAssignment, setSelectedAssignment] = useState<WorkbenchAssignment | null>(null);
 
   // Load documents and stats on component mount
   useEffect(() => {
@@ -69,15 +73,20 @@ export default withWorkbenchAuth(function WorkbenchPage() {
     loadDocuments();
   }, [searchTerm, categoryFilter, statusFilter]);
 
+  // Load assignments on mount
+  useEffect(() => {
+    loadAssignments();
+  }, []);
+
   const loadDocuments = async () => {
     try {
       setIsLoadingDocuments(true);
       const params: any = {};
-      
+
       if (searchTerm) params.search = searchTerm;
       if (categoryFilter !== 'all') params.category = categoryFilter;
       if (statusFilter !== 'all') params.status = statusFilter;
-      
+
       const fetchedDocuments = await workbenchAPI.getDocuments(params);
       setDocuments(fetchedDocuments);
     } catch (error) {
@@ -107,6 +116,22 @@ export default withWorkbenchAuth(function WorkbenchPage() {
     }
   };
 
+  const loadAssignments = async () => {
+    setIsLoadingAssignments(true);
+    try {
+      // Example: fetch all assignments (replace with paginated/filter API if available)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/workbench/assignments`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('workbench_token')}` }
+      });
+      const data = await response.json();
+      setAssignments(data.assignments || []);
+    } catch (err) {
+      toast({ title: 'Error Loading Assignments', description: 'Failed to load assignments.', variant: 'destructive' });
+    } finally {
+      setIsLoadingAssignments(false);
+    }
+  };
+
   // Filter and sort documents
   const filteredDocuments = documents
     .filter(doc => {
@@ -118,12 +143,12 @@ export default withWorkbenchAuth(function WorkbenchPage() {
     .sort((a, b) => {
       let aValue: any = a[sortBy as keyof WorkbenchDocument];
       let bValue: any = b[sortBy as keyof WorkbenchDocument];
-      
+
       if (sortBy === 'uploadedAt' || sortBy === 'claimedAt') {
         aValue = new Date(aValue || 0).getTime();
         bValue = new Date(bValue || 0).getTime();
       }
-      
+
       if (sortOrder === 'asc') {
         return aValue > bValue ? 1 : -1;
       } else {
@@ -150,7 +175,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
       await workbenchAPI.claimDocument(docId);
       await loadDocuments(); // Refresh the list
       await loadStats(); // Update stats
-      
+
       toast({
         title: "Document Claimed",
         description: "You have successfully claimed this document for checking.",
@@ -185,7 +210,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
+
       toast({
         title: "Download Started",
         description: "The document has been downloaded successfully.",
@@ -226,10 +251,10 @@ export default withWorkbenchAuth(function WorkbenchPage() {
 
       await loadDocuments(); // Refresh the list
       await loadStats(); // Update stats
-      
+
       setShowUploadDialog(false);
       setUploadFiles({ plagiarismReport: null, aiReport: null });
-      
+
       toast({
         title: "Reports Uploaded",
         description: "Your reports have been processed successfully.",
@@ -257,7 +282,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
       await workbenchAPI.markDocumentZero(docId);
       await loadDocuments(); // Refresh the list
       await loadStats(); // Update stats
-      
+
       toast({
         title: "ZORO Marked",
         description: "Document marked as final. No further loops will be processed.",
@@ -268,6 +293,20 @@ export default withWorkbenchAuth(function WorkbenchPage() {
         description: error.message || "Please try again.",
         variant: "destructive"
       });
+    }
+  };
+
+  const handleClaimAssignment = async () => {
+    try {
+      const claimed = await workbenchAPI.claimNextAssignment();
+      if (claimed) {
+        toast({ title: 'Assignment Claimed', description: `Assignment ${claimed.title} claimed.` });
+        await loadAssignments();
+      } else {
+        toast({ title: 'No Assignments Available', description: 'No assignments to claim.' });
+      }
+    } catch (err) {
+      toast({ title: 'Claim Failed', description: 'Could not claim assignment.', variant: 'destructive' });
     }
   };
 
@@ -296,7 +335,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
     const now = new Date();
     const date = new Date(dateString);
     const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-    
+
     if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
     if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
     return `${Math.floor(diffInMinutes / 1440)}d ago`;
@@ -355,7 +394,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -369,7 +408,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -383,7 +422,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -414,7 +453,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
                   />
                 </div>
               </div>
-              
+
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="Category" />
@@ -428,7 +467,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
                   <SelectItem value="report">Report</SelectItem>
                 </SelectContent>
               </Select>
-              
+
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="Status" />
@@ -442,7 +481,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
                   <SelectItem value="flagged">Flagged</SelectItem>
                 </SelectContent>
               </Select>
-              
+
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="Sort By" />
@@ -454,7 +493,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
                   <SelectItem value="priority">Priority</SelectItem>
                 </SelectContent>
               </Select>
-              
+
               <Button
                 variant="outline"
                 onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
@@ -557,7 +596,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
                             Claim
                           </Button>
                         )}
-                        
+
                         {doc.claimedBy === user?.username && (
                           <>
                             <Button
@@ -568,7 +607,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
                             >
                               <Download className="w-3 h-3" />
                             </Button>
-                            
+
                             <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
                               <DialogTrigger asChild>
                                 <Button
@@ -612,7 +651,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
                                     />
                                   </div>
                                   <div className="flex space-x-2">
-                                    <Button 
+                                    <Button
                                       onClick={() => selectedDocument && handleUploadReports(selectedDocument.id)}
                                       className="flex-1"
                                     >
@@ -630,7 +669,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
                             </Dialog>
                           </>
                         )}
-                        
+
                         <Button
                           size="sm"
                           variant="ghost"
@@ -645,7 +684,7 @@ export default withWorkbenchAuth(function WorkbenchPage() {
                 ))}
               </TableBody>
             </Table>
-            
+
             {isLoadingDocuments ? (
               <div className="text-center py-8">
                 <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
@@ -658,7 +697,41 @@ export default withWorkbenchAuth(function WorkbenchPage() {
             ) : null}
           </CardContent>
         </Card>
+
+        {/* Assignments Tab */}
+        <Tabs defaultValue="documents" className="mb-8">
+          <TabsList>
+            <TabsTrigger value="documents">Documents</TabsTrigger>
+            <TabsTrigger value="assignments">Assignments</TabsTrigger>
+          </TabsList>
+          <TabsContent value="documents">
+            {/* ...existing documents table... */}
+          </TabsContent>
+          <TabsContent value="assignments">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Assignments ({assignments.length})</h2>
+              <Button onClick={handleClaimAssignment} variant="default">Claim Next Assignment</Button>
+            </div>
+            {isLoadingAssignments ? (
+              <div className="text-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
+                <p className="text-gray-500">Loading assignments...</p>
+              </div>
+            ) : assignments.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">No assignments found.</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {assignments.map((assignment) => (
+                  <div key={assignment.id} onClick={() => setSelectedAssignment(assignment)}>
+                    <AssignmentCard summary={assignment} />
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Assignment details modal/dialog could go here */}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
-}, ['document.claim']); // Require document claim permission
+}, ['document.claim']);

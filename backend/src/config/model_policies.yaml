@@ -1,0 +1,107 @@
+policies:
+  chatgpt-o3-high:
+    provider: direct_openai
+    provider_model_id: o3
+    capabilities:
+      streaming: true
+      function_calling: true
+      reasoning: true
+      code_generation: true
+    cost_tier: MEDIUM
+    context_window: 200000
+    input_cost_per_1k: 0.0005
+    output_cost_per_1k: 0.0015
+    fallback_models: [claude-4-sonnet, gpt-4o-mini]
+
+  chatgpt-5-thinking:
+    provider: direct_openai
+    provider_model_id: gpt-5
+    capabilities:
+      streaming: true
+      function_calling: true
+      reasoning: true
+      code_generation: true
+    cost_tier: HIGH
+    context_window: 200000
+    input_cost_per_1k: 0.005
+    output_cost_per_1k: 0.015
+    fallback_models: [chatgpt-o3-high, claude-4-sonnet]
+
+  gemini-2.5-pro-direct:
+    provider: direct_gemini
+    provider_model_id: gemini-2.5-pro
+    capabilities:
+      streaming: true
+      creative_writing: true
+      long_context: true
+      reasoning: true
+    cost_tier: MEDIUM
+    context_window: 1000000
+    input_cost_per_1k: 0.007
+    output_cost_per_1k: 0.021
+    fallback_models: [gemini-2.5-pro, claude-4-sonnet]
+
+  gemini-2.5-flash-direct:
+    provider: direct_gemini
+    provider_model_id: gemini-2.5-flash
+    capabilities:
+      streaming: true
+      creative_writing: true
+    cost_tier: LOW
+    context_window: 1000000
+    input_cost_per_1k: 0.000075
+    output_cost_per_1k: 0.0003
+    fallback_models: [gpt-4o-mini]
+
+  gemini-2.5-pro:
+    provider: openrouter
+    provider_model_id: google/gemini-2.5-pro
+    capabilities:
+      streaming: true
+      creative_writing: true
+      long_context: true
+    cost_tier: MEDIUM
+    context_window: 1000000
+    input_cost_per_1k: 0.007
+    output_cost_per_1k: 0.021
+    fallback_models: [claude-4-sonnet]
+
+  gemini-2.5-flash:
+    provider: openrouter
+    provider_model_id: google/gemini-2.5-flash
+    capabilities:
+      streaming: true
+      creative_writing: true
+    cost_tier: LOW
+    context_window: 1000000
+    input_cost_per_1k: 0.000075
+    output_cost_per_1k: 0.0003
+    fallback_models: [gpt-4o-mini]
+
+  claude-4-sonnet:
+    provider: openrouter
+    provider_model_id: anthropic/claude-4-sonnet
+    capabilities:
+      streaming: true
+      function_calling: true
+      reasoning: true
+      creative_writing: true
+      long_context: true
+    cost_tier: HIGH
+    context_window: 200000
+    input_cost_per_1k: 0.003
+    output_cost_per_1k: 0.015
+    fallback_models: [gemini-2.5-pro, chatgpt-4.1]
+
+  gpt-4o-mini:
+    provider: openrouter
+    provider_model_id: openai/gpt-4o-mini
+    capabilities:
+      streaming: true
+      function_calling: true
+      creative_writing: true
+    cost_tier: LOW
+    context_window: 128000
+    input_cost_per_1k: 0.00015
+    output_cost_per_1k: 0.0006
+    fallback_models: [gemini-2.5-flash]

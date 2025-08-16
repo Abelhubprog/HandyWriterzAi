@@ -1,0 +1,367 @@
+# 🚨 HandyWriterzAI – End-to-End Fix & Refactor Task Prompt
+
+**Your role:**  
+Act as a full-stack engineer with authority to modify all code in both backend and frontend. You have full access to the codebase (`@/entirbackendrepo.md`, `@/entirefrontendrepo.md`) and the Failure Report. Your goal: Make the agentic system *and* Chat UI work together as a robust, modern, multi-agent writing assistant.
+
+---
+
+## 🎯 1. Goals
+
+- Achieve *end-to-end working user journeys* for all academic use cases (dissertation, essay, research paper, etc.)
+- Realize a ChatGPT/Kimi K2 level experience: responsive streaming, file context, progress ticks, error recovery, and full agent orchestration.
+
+---
+
+## 🩺 2. Diagnosis Summary
+
+- **Frontend/Backend contracts are broken:**  
+  - SSE event formats and endpoints do not match.
+  - File ingestion and chat orchestration chain is fragmented.
+  - Event/parameter naming (snake_case/camelCase) is inconsistent.
+  - Dual Redis/SSE channels (legacy vs unified) cause split-brain.
+  - Next.js proxy vs direct browser API calls are out of sync (CORS, env mismatch).
+  - Critical services and publishers are uninitialized.
+  - State stores diverge between client and server.
+  - UI and API flows never complete a journey.
+
+---
+
+## 🛠️ 3. Fix Plan – By Category
+
+### A. **Integration Layer Fixes**
+
+- [ ] **Standardize SSE Event Format:**  
+  - Define one canonical event schema (see below).
+  - Update both backend publishers and frontend consumers to use it.
+
+- [ ] **Unify Endpoint Contracts:**  
+  - `/api/chat` (POST): always returns `conversation_id` (and/or `trace_id`) for streaming.
+  - `/api/stream/{conversation_id}` (GET, SSE): must deliver all events in the correct format for that conversation.
+
+- [ ] **Double-publish or Bridge Unified/Legacy SSE Channels:**  
+  - Ensure all events are published to the channel the frontend listens to (`sse:{conversation_id}`).
+  - Or, update the SSE consumer to listen to the unified channel if that becomes canonical.
+
+### B. **Backend Critical Fixes**
+
+- [ ] **Initialize SSE Publisher**:  
+  - In `backend/src/main.py`, call `initialize_sse_publisher()` at startup, and pass a working Redis client.
+  - Ensure all agent nodes and UnifiedProcessor have access to the same publisher.
+
+- [ ] **Fix UnifiedProcessor and Graph Execution**:  
+  - Validate that the graph (`handywriterz_graph`) is always initialized before invocation.
+  - Ensure all critical events (`file_processing`, `planning_started`, `writer_started`, etc.) are published in order.
+
+- [ ] **File Content Service**:  
+  - Implement/verify `FileContentService` extracts text from files, stores previews in Postgres, and emits the correct event (`progress:file_processing`).
+
+- [ ] **Health and Error Events:**  
+  - Always emit `error` and `done` events to close the SSE stream.
+  - Provide `/health/live` and `/health/ready` endpoints as described.
+
+### C. **Frontend Fixes**
+
+- [ ] **Single Source of Truth for API URLs:**  
+  - Use one environment variable for backend URL across all server and client code.
+  - Ensure `/api/stream/{conversation_id}` routes through Next.js proxy, not direct browser-to-backend (fixes CORS).
+
+- [ ] **Align Event Consumers:**  
+  - In `useStream.ts` and related hooks/components, parse the canonical SSE event format only.
+  - Ensure token streaming, progress, and finalization events all update UI as designed.
+
+- [ ] **Composer Row & State Sync:**  
+  - Fix the message composer: single row, dropdown, file chips, send arrow activation, mic, etc. (see UI spec above).
+  - Example cards, conversation switching, export, library—implement as per requirements.
+
+### D. **API and Data Flow Fixes**
+
+- [ ] **Parameter Normalization:**  
+  - Convert all params to one convention (prefer snake_case for Python; camelCase for frontend).
+  - Map file IDs, conversation IDs, and message structures consistently.
+
+- [ ] **Validation & Error Boundaries:**  
+  - Add graceful error recovery for all API calls and SSE failures.
+  - Surface clear UI messages/toasts, and allow retry where possible.
+
+### E. **Testing**
+
+- [ ] **End-to-End Journey Tests:**  
+  - Implement or update test cases for each user journey (dissertation, essay, research paper, etc.).
+  - Ensure file upload, agentic planning, streaming, and export all work in flow.
+
+- [ ] **Contract Tests:**  
+  - For each API/SSE contract, test with real payloads and edge cases (invalid IDs, file too large, etc.).
+
+---
+
+## 🧩 4. Canonical SSE Event Schema
+
+Example:
+
+```json
+// Canonical event for all SSE
+{
+  "type": "token" | "progress" | "content" | "error" | "done",
+  "delta"?: "string",      // for token
+  "step"?: "string",       // for progress
+  "text"?: "string",       // for content
+  "total_tokens"?: int,    // for done
+  "cost"?: float,          // for done
+  "duration_ms"?: int,     // for done
+  "error"?: "string"       // for error
+}
+````
+
+* All events for a conversation must be published to the same Redis channel (or a direct stream).
+* All events must be delivered to the frontend in the exact order they are emitted.
+* The stream must close on a `done` or `error` event.
+
+---
+
+## 📝 5. Concrete To-dos (Fill/assign as you work)
+
+### **Critical**
+
+* [ ] Fix SSE publisher init in `main.py`
+* [ ] Refactor `/api/stream/{conversation_id}` to use canonical channel
+* [ ] Standardize event envelope in `sse_unified.py` and `unified_processor.py`
+* [ ] Fix all broken/missing imports and service dependencies (backend)
+* [ ] Update `useStream.ts` to match the event schema and endpoint
+* [ ] Test complete flow: chat send → file upload → SSE streaming → agent progress → output → export
+
+### **High**
+
+* [ ] Fix API URL resolution everywhere (Next.js env + client code)
+* [ ] Complete file extraction/embedding pipeline to support doc context
+* [ ] Validate LangGraph orchestration, all agents emit events
+* [ ] Wire all UI actions to new backend APIs and state stores
+* [ ] Add/expand e2e and regression tests for all critical flows
+
+### **Polish**
+
+* [ ] Refine composer row, streaming, example cards
+* [ ] Implement full export, library, and retry mechanics
+* [ ] Add usage/cost metering to UI
+
+---
+
+## ⏩ 6. Quickstart Script (for dev/test)
+
+1. **Run Backend** (after code fixes):
+
+   ```bash
+   python backend/src/main.py
+   ```
+
+2. **Run Frontend** (with correct env):
+
+   ```bash
+   export NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+   npm run dev
+   ```
+
+3. **Verify with prompt:**
+
+   * Paste a dissertation or essay prompt.
+   * Upload a PDF.
+   * Confirm planning, token streaming, citations, and download/export.
+
+---
+
+## ✅ 7. Acceptance Criteria
+
+* Chat UI is responsive and streams assistant tokens in real-time.
+* File uploads are reflected in agent context and cited in output.
+* Progress/status ticks animate correctly.
+* SSE stream always terminates on done or error.
+* Export/download works for all major formats.
+* No console errors or blank screens.
+* All journeys from demo cards to final artifact are fully working.
+
+---
+
+**You must**:
+
+* Fix all integration failures (backend–frontend)
+* Repair all broken agentic orchestration (LangGraph)
+* Standardize event and API contracts
+* Guarantee end-to-end user journeys
+* Ship with full regression and journey tests passing
+
+---
+
+1. Agent and Orchestration Core
+ Audit and refactor all agent entrypoints: backend/src/agent/app.py, handywriterz_graph.py, base.py.
+
+ Add docstrings and type hints for each exported function.
+
+ Ensure every agent class has: receive_input, process, emit_output methods.
+
+ Validate and document all nodes in backend/src/agent/nodes/.
+
+ List all nodes and their roles (e.g. aggregator, memory_integrator_node, planner, fail_handler).
+
+ For each: confirm signature, input/output contract, error handling.
+
+ Swarm Orchestration
+
+ Review and debug orchestration logic (orchestration/, swarm_coordinator.py).
+
+ Create sequence diagrams for “prompt → swarm → output” for all main flows.
+
+ Implement logging for every message handoff between agents.
+
+2. Agent State & Memory (Crucial!)
+ Review and update memory handling logic (memory_integrator_node.py, memory_writer.py, memory_retriever.py, memory_integrator.py, README_MEMORY.md).
+
+ Standardize memory API (read, write, retrieve, clear).
+
+ Add integration tests: agent output → write to memory → retrieve on next call.
+
+ Build a minimal “memory demo agent” to prove round-trip persistence.
+
+ If vector DB (pgvector) is used, ensure semantic memory queries work (test for leaks and silent failures).
+
+ Document memory lifecycle: where it’s stored, when it’s loaded, when it’s cleared (per user/session/agent?).
+
+3. Multi-Model and Provider Wiring
+ Ensure model selection is working and dynamic.
+
+ backend/src/models/ and config/model_config.yaml: audit all models and update to only SOTA models (e.g. Gemini 2.5 Pro, O3, Claude Opus, Kimi K2, etc.).
+
+ Add endpoint (or admin panel) to change model assignments at runtime.
+
+ Integration test: swap model for intent_analyzer, confirm output changes.
+
+ Validate all provider classes in models/ for working API keys, error surfaces, and retry logic.
+
+ Add coverage for streaming and non-streaming responses per model/provider.
+
+4. Streaming & Real-Time Feedback
+ Test all SSE endpoints (agent/sse.py, sse_unified.py, frontend chat hooks).
+
+ Confirm client receives live tokens/messages as they’re generated.
+
+ Inject artificial delays/errors to verify robust frontend updates/errors.
+
+ On the frontend, ensure hooks (useChatStream, useStream, etc.) are robust against dropped/duplicate messages.
+
+5. Full-stack Agentic User Journey
+ Map every route a user takes: file upload → prompt entry → agentic swarm → streaming output → download/export.
+
+ For each step, write an e2e test (backend/tests/e2e/test_full_flow.py).
+
+ Confirm all agents are invoked, memory persists, output is streamed and stored.
+
+ For each writing type, validate that the correct agents and models are called (test via dropdown selection, prompt, file context).
+
+ Build smoke tests that:
+
+ Upload a doc, run through all agents, get output, check for errors.
+
+ Repeat for multimodal (audio/image) inputs.
+
+6. Frontend <-> Backend Integration
+ Refactor chat UI components to ensure unified, ChatGPT-like experience (see EnhancedChatView.tsx, MessageInputBar.tsx, ImprovedInputForm.tsx).
+
+ Confirm chat messages, uploads, agent outputs, and streaming work end-to-end.
+
+ Fix any detachment in dropdowns, uploaders, message display (as per your notes/screenshots).
+
+ Integration test: send prompt, see streaming response, show agent steps/activities.
+
+ Add loading/error states for slow/failed responses.
+
+7. Admin/Debug/Diagnostics
+ Expose agent status and orchestration logs in the admin dashboard (ModelConfigPanel, AgentOrchestrationDashboard).
+
+ Implement health checks for:
+
+ All model providers (returns valid, up/down, quota info).
+
+ Memory and database connection.
+
+ SSE endpoint.
+
+ “Replay” failed agent runs with the same input (for debugging).
+
+8. Testing, Monitoring, and Deployment
+ Achieve >90% test coverage in backend agent logic and orchestration.
+
+ Ensure all critical workflows are covered in Playwright E2E tests.
+
+ Setup error monitoring (Sentry or similar) for backend exceptions and streaming failures.
+
+ Test Docker and Railway deployment scripts (all .sh and Dockerfiles).
+
+ Deploy to Railway staging, run all e2e tests.
+
+ Validate logs, error handling, and service restarts.
+
+ Prepare production configs for all required environment variables (cross-check with .env.example and docs).
+
+9. Documentation & Hand-off
+ For each major backend module, update markdown in backend/docs/ (especially agentic.md, flow.md, usersjourneys.md).
+
+ Document every agent type, their flow, and example input/output.
+
+ Add a “Debugging Agentic Failures” guide (common root causes, e.g., failed orchestration, memory not persisting, model errors).
+
+CRITICAL: Showstoppers
+If any of these fail, the agentic system won’t work:
+
+Memory not persisting across agent steps or user sessions.
+
+Model APIs returning errors/silent failures (quota, 4xx, 5xx).
+
+Frontend not receiving streaming output or out-of-sync with backend.
+
+Agent and Orchestration Core
+Agent State & Memory
+Multi-Model and Provider Wiring
+Streaming & Real-Time Feedback
+Full-stack Agentic User Journey
+Frontend <-> Backend Integration
+Admin/Debug/Diagnostics
+Testing, Monitoring, and Deployment
+Documentation & Hand-off
+
+Audit and refactor agent entrypoints: app.py, handywriterz_graph.py, base.py
+Add docstrings and type hints for each exported function
+Ensure every agent class has: receive_input, process, emit_output methods
+Validate and document all nodes in backend/src/agent/nodes/
+Review and debug orchestration logic
+Create sequence diagrams for main flows
+Implement logging for message handoff between agents
+Review and update memory handling logic
+Standardize memory API
+Add integration tests for memory
+Build minimal memory demo agent
+Audit model selection and update to SOTA models
+Add endpoint to change model assignments at runtime
+Validate provider classes for API keys and error handling
+Test all SSE endpoints
+Confirm client receives live tokens/messages
+Refactor chat UI components
+Map every user journey route
+Write e2e tests for full flow
+Expose agent status in admin dashboard
+Implement health checks
+Achieve >90% test coverage
+Setup error monitoring
+Test deployment scripts
+Update documentation
+
+
+Orchestration loop breaks after agent fail (no retries, no failover).
+
+Database or Redis disconnects not gracefully handled.
+
+Test each of these as its own dedicated “failure mode” scenario.
+
+How to track progress?
+Make every TODO its own ticket/task in your tracker.
+
+Require a demo or test for every critical user journey (“from upload to agent swarm output in UI”).
+
+No ticket closed until “works end-to-end, robust to errors, and recovers gracefully.”

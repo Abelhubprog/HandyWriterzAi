@@ -1,5 +1,8 @@
 """Configuration module for HandyWriterz backend."""
 
+import os
+import json
+
 # Move the content here directly to avoid circular imports
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
@@ -33,6 +36,8 @@ class HandyWriterzSettings(BaseSettings):
     openai_api_key: Optional[str] = Field(None, env="OPENAI_API_KEY")
     gemini_api_key: Optional[str] = Field(None, env="GEMINI_API_KEY")
     perplexity_api_key: Optional[str] = Field(None, env="PERPLEXITY_API_KEY")
+    openrouter_api_key: Optional[str] = Field(None, env="OPENROUTER_API_KEY")
+    app_url: str = Field(default="http://localhost:3000", env="APP_URL")
 
     # ==========================================
     # DATABASE CONFIGURATION
@@ -150,8 +155,34 @@ class HandyWriterzSettings(BaseSettings):
 
 
 # Global settings instance
+def _coerce_list_env(var_name: str) -> None:
+    """Ensure comma-separated list envs are valid JSON arrays for pydantic-settings.
+
+    Pydantic's EnvSettingsSource tries to JSON-decode list fields; when users
+    provide comma-separated values (e.g., "a,b"), it fails before validators run.
+    This coerces such envs into JSON arrays at runtime.
+    """
+    try:
+        val = os.getenv(var_name)
+        if not val:
+            return
+        s = val.strip()
+        # if it's already JSON array-ish, leave as-is
+        if s.startswith('[') and s.endswith(']'):
+            return
+        # otherwise, split on commas
+        parts = [p.strip() for p in s.split(',') if p.strip()]
+        os.environ[var_name] = json.dumps(parts)
+    except Exception:
+        # best effort; fall back to default
+        pass
+
+
 def get_settings() -> HandyWriterzSettings:
     """Get the global settings instance."""
+    # Normalize list envs to JSON arrays so pydantic can parse them reliably
+    _coerce_list_env('ALLOWED_ORIGINS')
+    _coerce_list_env('CORS_ORIGINS')
     return HandyWriterzSettings()
 
 

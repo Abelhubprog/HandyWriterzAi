@@ -1,10 +1,24 @@
 {
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter handywriterz-nextjs dev"
+		"dev": "pnpm --dir ./frontend dev",
+		"dev:all": "pwsh -ExecutionPolicy Bypass -File start-local.ps1",
+		"dev:win": "pwsh -ExecutionPolicy Bypass -File start-local.ps1",
+		"dev:linux": "bash ./start-local.sh",
+		"dev:backend": "pwsh -ExecutionPolicy Bypass -File start-local.ps1 -BackendOnly",
+		"dev:frontend": "pnpm --dir ./frontend dev",
+		"build:frontend": "pnpm --dir ./frontend build",
+		"start:frontend": "pnpm --dir ./frontend start"
   },
+	"scripts": {
+		"worker": "bash scripts/run-celery.sh"
+	},
 	"dependencies": {
 		"react-speech-recognition": "^4.0.1",
 		"@types/react-speech-recognition": "^3.9.6"
+	},
+	"engines": {
+		"node": ">=18",
+		"pnpm": ">=9"
 	}
 }

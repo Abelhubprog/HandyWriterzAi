@@ -10,15 +10,7 @@ except Exception:  # pragma: no cover
     ChatOpenAI = object  # type: ignore[misc,assignment]
 
 from ...agent.handywriterz_state import HandyWriterzState  # type: ignore
-
-
-# Best-effort import for unified SSE publisher (non-fatal if unavailable)
-try:
-    from src.agent.sse import SSEPublisher  # type: ignore
-    import redis.asyncio as _redis  # type: ignore
-    _SSE: Optional["SSEPublisher"] = SSEPublisher(async_redis=_redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379")))  # type: ignore[call-arg]
-except Exception:  # pragma: no cover
-    _SSE = None
+from src.services.sse_service import get_sse_service  # type: ignore
 
 
 class SearchResultDict(TypedDict, total=False):
@@ -49,13 +41,15 @@ class OpenAISearchAgent:
 
     async def _publish(self, conversation_id: Optional[str], event_type: str, payload: Dict[str, Any]) -> None:
         """Publish SSE event if publisher available (best-effort, non-fatal)."""
-        if not conversation_id or _SSE is None:
+        if not conversation_id:
             return
         try:
             data: Dict[str, Any] = dict(payload)
             if "ts" not in data:
-                data["ts"] = datetime.utcnow().isoformat()
-            await _SSE.publish(conversation_id, event_type, data)  # type: ignore[attr-defined]
+                # Use epoch seconds for canonical envelope
+                import time
+                data["ts"] = time.time()
+            await get_sse_service().publish_event(conversation_id, event_type, data)
         except Exception:
             # Ignore SSE failures
             pass

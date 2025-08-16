@@ -15,13 +15,12 @@ import sys
 import os
 from typing import Dict, Any, List
 
-# Add both backend paths to Python path for imports
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "src")))
+# Rely on environment/runner to include project paths.
+# Repo includes a root-level sitecustomize.py that prepends `backend` and `backend/src` to sys.path.
 
 logger = logging.getLogger(__name__)
 
-# Import simple Gemini system (from current directory structure)
+# Import simple Gemini system (if present)
 try:
     from src.agent.graph import graph as gemini_graph
     from src.agent.state import OverallState as GeminiState
@@ -29,17 +28,17 @@ try:
     SIMPLE_AVAILABLE = True
     logger.info("✅ Simple Gemini system imported successfully")
 except ImportError as e:
-    logger.warning(f"⚠️ Simple Gemini system not available: {e}")
+    logger.info(f"ℹ️ Simple Gemini system not available: {e}")
     gemini_graph = None
     GeminiState = None
     HumanMessage = None
     SIMPLE_AVAILABLE = False
 
-# Import advanced HandyWriterz system (from backend/backend/src)
+# Import advanced HandyWriterz system (primary)
 try:
-    from agent.handywriterz_graph import handywriterz_graph
-    from agent.handywriterz_state import HandyWriterzState
-    from agent.base import UserParams
+    from src.agent.handywriterz_graph import handywriterz_graph
+    from src.agent.handywriterz_state import HandyWriterzState
+    from src.agent.base import UserParams
     ADVANCED_AVAILABLE = True
     logger.info("✅ Advanced HandyWriterz system imported successfully")
 except ImportError as e:

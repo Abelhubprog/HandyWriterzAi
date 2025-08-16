@@ -1,29 +1,41 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional, Dict, Any
 import uuid
 
 from backend.src.db.database import get_db
-from backend.src.db.repositories import WorkbenchUserRepository
-from backend.src.auth.workbench_auth import WorkbenchAuthService
-from backend.src.services.security_service import SecurityService
-from backend.src.api.schemas.workbench_auth import WorkbenchLoginRequest, WorkbenchTokenResponse, WorkbenchUserCreate, WorkbenchUserResponse, WorkbenchUserUpdate
-from backend.src.db.models import WorkbenchUserRole, WorkbenchUser
+from src.services.security_service import RevolutionarySecurityService
+from backend.src.api.schemas.workbench_auth import WorkbenchTokenResponse, WorkbenchUserCreate, WorkbenchUserResponse, WorkbenchUserUpdate
+from backend.src.db.models import WorkbenchUser
+
+# Import the new Dynamic.xyz-based Workbench auth service (aliased to avoid name clash)
+from src.services.workbench_auth_service import (
+    get_workbench_auth_service as get_dynamic_workbench_auth_service,
+    WorkbenchAuthService as DynamicWorkbenchAuthService,
+)
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/workbench/auth", tags=["Workbench Auth"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/workbench/auth/token")
 
-def get_workbench_auth_service(db: Session = Depends(get_db)) -> WorkbenchAuthService:
-    security_service = SecurityService()
-    return WorkbenchAuthService(db, security_service)
+def get_workbench_auth_service(db: Session = Depends(get_db)):
+    """Best-effort factory for legacy password-based workbench auth service.
+    Returns an instance if legacy module is available; otherwise raises 501.
+    """
+    try:
+        from backend.src.auth.workbench_auth import WorkbenchAuthService as LegacyWorkbenchAuthService
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=f"Legacy workbench auth not available: {e}")
+    security_service = RevolutionarySecurityService()
+    return LegacyWorkbenchAuthService(db, security_service)  # type: ignore[no-any-return]
 
-def get_current_workbench_user(token: str = Depends(oauth2_scheme), auth_service: WorkbenchAuthService = Depends(get_workbench_auth_service)) -> WorkbenchUser:
+def get_current_workbench_user(token: str = Depends(oauth2_scheme), auth_service: Any = Depends(get_workbench_auth_service)) -> WorkbenchUser:
     return auth_service.get_current_workbench_user(token)
 
 @router.post("/token", response_model=WorkbenchTokenResponse)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), auth_service: WorkbenchAuthService = Depends(get_workbench_auth_service)):
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), auth_service: Any = Depends(get_workbench_auth_service)):
     user = auth_service.authenticate_user(form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -37,7 +49,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 @router.post("/users", response_model=WorkbenchUserResponse, status_code=status.HTTP_201_CREATED)
 async def create_workbench_user(
     user_create: WorkbenchUserCreate,
-    auth_service: WorkbenchAuthService = Depends(get_workbench_auth_service),
+    auth_service: Any = Depends(get_workbench_auth_service),
     current_user: WorkbenchUser = Depends(get_current_workbench_user) # Requires authentication
 ):
     auth_service.require_workbench_admin()(current_user) # Enforce admin role
@@ -62,7 +74,7 @@ async def read_users_me(current_user: WorkbenchUser = Depends(get_current_workbe
 async def list_workbench_users(
     skip: int = 0,
     limit: int = 100,
-    auth_service: WorkbenchAuthService = Depends(get_workbench_auth_service),
+    auth_service: Any = Depends(get_workbench_auth_service),
     current_user: WorkbenchUser = Depends(get_current_workbench_user)
 ):
     auth_service.require_workbench_admin()(current_user) # Enforce admin role
@@ -73,7 +85,7 @@ async def list_workbench_users(
 async def update_workbench_user(
     user_id: uuid.UUID,
     user_update: WorkbenchUserUpdate,
-    auth_service: WorkbenchAuthService = Depends(get_workbench_auth_service),
+    auth_service: Any = Depends(get_workbench_auth_service),
     current_user: WorkbenchUser = Depends(get_current_workbench_user)
 ):
     auth_service.require_workbench_admin()(current_user) # Enforce admin role
@@ -91,7 +103,7 @@ async def update_workbench_user(
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workbench_user(
     user_id: uuid.UUID,
-    auth_service: WorkbenchAuthService = Depends(get_workbench_auth_service),
+    auth_service: Any = Depends(get_workbench_auth_service),
     current_user: WorkbenchUser = Depends(get_current_workbench_user)
 ):
     auth_service.require_workbench_admin()(current_user) # Enforce admin role
@@ -99,3 +111,94 @@ async def delete_workbench_user(
     if not auth_service.user_repo.delete_user(user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return {"message": "User deleted successfully"}
+
+# ------------------------------
+# Dynamic.xyz-based Workbench Auth Endpoints
+# ------------------------------
+
+class DynamicLoginRequest(BaseModel):
+    dynamic_token: str
+
+
+class WorkbenchLoginResponse(BaseModel):
+    success: bool
+    user: Dict[str, Any]
+    token: str
+    expires_at: str
+
+
+class WorkbenchVerifyResponse(BaseModel):
+    valid: bool
+    user: Optional[Dict[str, Any]] = None
+
+
+class WorkbenchLogoutResponse(BaseModel):
+    success: bool
+
+
+def _extract_bearer_token(authorization: Optional[str]) -> Optional[str]:
+    if not authorization:
+        return None
+    parts = authorization.split()
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1]
+    return None
+
+
+@router.post("/login", response_model=WorkbenchLoginResponse)
+async def workbench_dynamic_login(
+    payload: DynamicLoginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    dyn_auth: DynamicWorkbenchAuthService = Depends(get_dynamic_workbench_auth_service),
+):
+    """Login using Dynamic.xyz token and receive a Workbench JWT + user info."""
+    result = dyn_auth.authenticate_workbench_user(payload.dynamic_token, db)
+    # Normalize user payload to include isVerified
+    user = dict(result.get("user") or {})
+    if "isVerified" not in user:
+        if "is_verified" in user:
+            user["isVerified"] = user.get("is_verified")
+        else:
+            user["isVerified"] = True
+    # Shape response to frontend expectations
+    return {
+        "success": True,
+        "user": user,
+        "token": result.get("token"),
+        "expires_at": result.get("expires_at"),
+    }
+
+
+@router.post("/verify", response_model=WorkbenchVerifyResponse)
+async def workbench_dynamic_verify(
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    dyn_auth: DynamicWorkbenchAuthService = Depends(get_dynamic_workbench_auth_service),
+):
+    """Verify a Workbench JWT and return the embedded user payload."""
+    token = _extract_bearer_token(authorization)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+    payload = dyn_auth.verify_workbench_token(token)
+    # Map payload to user object expected by frontend
+    user: Dict[str, Any] = {
+        "id": payload.get("sub"),
+        "username": payload.get("username"),
+        "email": payload.get("email"),
+        "role": payload.get("role"),
+        "permissions": payload.get("permissions", []),
+        "isVerified": True,
+    }
+    return {"valid": True, "user": user}
+
+
+@router.post("/logout", response_model=WorkbenchLogoutResponse)
+async def workbench_dynamic_logout(
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+):
+    """Stateless logout endpoint. Frontend should drop the token; we just acknowledge."""
+    # Optionally inspect token for auditing
+    _ = _extract_bearer_token(authorization)
+    return {"success": True}

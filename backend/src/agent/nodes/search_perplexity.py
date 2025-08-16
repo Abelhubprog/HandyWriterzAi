@@ -14,7 +14,7 @@ from dataclasses import dataclass, asdict
 from langchain_core.runnables import RunnableConfig
 
 from src.agent.base import BaseNode, NodeError
-from ...agent.handywriterz_state import HandyWriterzState
+from src.agent.handywriterz_state import HandyWriterzState
 from .error_handling import (
     with_error_handling, RetryConfig, ErrorCategory, NodeErrorHandler
 )

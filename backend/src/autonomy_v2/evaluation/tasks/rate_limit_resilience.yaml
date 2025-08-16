@@ -1,0 +1,3 @@
+type: rate_limit_resilience
+goal: "Plan a research strategy for topic X"
+planner_failures: 2

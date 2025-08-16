@@ -16,13 +16,13 @@ from contextlib import asynccontextmanager
 import openai
 import httpx
 from anthropic import AsyncAnthropic
-from google.generativeai import configure as configure_gemini
-import google.generativeai as genai
 
-from ..config.settings import get_settings
+from ..config import get_settings
 from ..services.budget import BudgetGuard, CostLevel
 from ..services.cost_tracker import CostTracker
 from .tracing import DistributedTracer, TraceContext
+from ..services.credits_service import get_credits_service
+import os
 
 
 logger = logging.getLogger(__name__)
@@ -465,6 +465,19 @@ class UnifiedLLMGateway:
             estimated_cost=estimated_cost,
             cost_level=request.model_spec.cost_tier
         )
+        # Credits preflight (reserve) guarded by env flag
+        if os.getenv("CREDITS_ENFORCE", "false").lower() == "true":
+            try:
+                if request.user_id and request.trace_id:
+                    est_credits = int(estimated_cost / 0.001 + 0.999) if estimated_cost > 0 else 0
+                    if est_credits > 0:
+                        svc = get_credits_service()
+                        ok = await svc.reserve_credits(request.user_id, request.trace_id, est_credits)
+                        if not ok:
+                            raise ValueError("Insufficient credits for this request")
+            except Exception:
+                # Bubble up as budget/credits failure
+                raise
     
     def _estimate_cost(self, request: LLMRequest) -> float:
         """Estimate request cost for budget checking"""
@@ -530,7 +543,15 @@ class UnifiedLLMGateway:
                 
                 # Get appropriate gateway
                 gateway = self.gateways[request.model_spec.provider]
-                
+                # BYOK guard for OpenRouter o3 family
+                try:
+                    if request.model_spec.provider == ProviderType.OPENROUTER:
+                        pm = request.model_spec.provider_model_id
+                        if pm in ("openai/o3", "openai/o3-pro") and os.getenv("OPENROUTER_BYOK", "false").lower() != "true":
+                            raise RuntimeError("OpenRouter o3 requires BYOK. Set OPENROUTER_BYOK=true and configure BYOK in OpenRouter.")
+                except Exception as byok_err:
+                    raise byok_err
+
                 # Execute with retries
                 try:
                     response = await self._execute_with_retry(request, gateway)
@@ -544,7 +565,7 @@ class UnifiedLLMGateway:
                         raise primary_error
                 
                 # Post-execution tracking
-                await self._track_usage(response)
+                await self._track_usage(request, response)
                 
                 # Update trace with results
                 trace_context.metadata.update({
@@ -558,6 +579,13 @@ class UnifiedLLMGateway:
             except Exception as e:
                 trace_context.metadata["error"] = str(e)
                 logger.error(f"Gateway execution failed: {e}")
+                # Release reserved credits on failure
+                try:
+                    if request.user_id and request.trace_id:
+                        svc = get_credits_service()
+                        await svc.release_reservation(request.user_id, request.trace_id)
+                except Exception as _e:
+                    logger.warning(f"Credits release failed: {_e}")
                 raise
     
     async def stream_execute(self, request: LLMRequest) -> AsyncIterator[Dict[str, Any]]:
@@ -579,6 +607,29 @@ class UnifiedLLMGateway:
                     "tokens_streamed": total_tokens,
                     "streaming": True
                 })
+                # Best-effort credit recording for streaming (estimate input tokens)
+                try:
+                    # Estimate input tokens from prompt messages
+                    est_input = sum(len(m.get("content", "")) for m in request.messages) // 4
+                    model = request.model_spec
+                    input_cost = (est_input * model.input_cost_per_1k) / 1000.0
+                    output_cost = (total_tokens * model.output_cost_per_1k) / 1000.0
+                    cost_usd = float(input_cost + output_cost)
+                    # 1 credit = $0.001
+                    credits = int(cost_usd / 0.001 + 0.999) if cost_usd > 0 else 0
+                    if request.user_id and credits > 0:
+                        svc = get_credits_service()
+                        await svc.record_usage(
+                            user_id=request.user_id,
+                            model=model.provider_model_id,
+                            input_tokens=int(est_input),
+                            output_tokens=int(total_tokens),
+                            cost_usd=cost_usd,
+                            credits=credits,
+                            meta={"node": request.node_name, "trace_id": request.trace_id, "provider": model.provider.value, "stream": True}
+                        )
+                except Exception as _credits_err:
+                    logger.warning(f"Credits (stream) recording failed: {_credits_err}")
                 
             except Exception as e:
                 trace_context.metadata["error"] = str(e)
@@ -587,16 +638,56 @@ class UnifiedLLMGateway:
                     "error": str(e),
                     "provider": request.model_spec.provider
                 }
+                # Release reserved credits on stream error
+                try:
+                    if request.user_id and request.trace_id:
+                        svc = get_credits_service()
+                        await svc.release_reservation(request.user_id, request.trace_id)
+                except Exception as _e:
+                    logger.warning(f"Credits release (stream) failed: {_e}")
     
-    async def _track_usage(self, response: LLMResponse) -> None:
-        """Track usage and costs"""
-        await self.cost_tracker.track_usage(
-            model=response.model_used,
-            provider=response.provider,
-            tokens_used=response.tokens_used["total"],
-            cost_usd=response.cost_usd,
-            trace_id=response.trace_id
-        )
+    async def _track_usage(self, request: LLMRequest, response: LLMResponse) -> None:
+        """Track usage and costs, and record credits when possible."""
+        try:
+            await self.cost_tracker.track_usage(
+                model=response.model_used,
+                provider=response.provider,
+                tokens_used=response.tokens_used["total"],
+                cost_usd=response.cost_usd,
+                trace_id=response.trace_id
+            )
+        except Exception as e:
+            logger.warning(f"Cost tracker failed: {e}")
+
+        # Convert cost into credits and record per user
+        try:
+            if request.user_id and response.cost_usd is not None:
+                credits = int(response.cost_usd / 0.001 + 0.999) if response.cost_usd > 0 else 0
+                if credits > 0 and request.trace_id:
+                    svc = get_credits_service()
+                    commit_info = await svc.commit_reservation(
+                        user_id=request.user_id,
+                        trace_id=request.trace_id,
+                        final_credits=credits,
+                        model=response.model_used,
+                        input_tokens=int(response.tokens_used.get("input", 0)),
+                        output_tokens=int(response.tokens_used.get("output", 0)),
+                        cost_usd=float(response.cost_usd),
+                        meta={"node": request.node_name, "trace_id": request.trace_id, "provider": response.provider}
+                    )
+                    # Emit SSE credits update if possible
+                    try:
+                        from ..services.sse_service import get_sse_service
+                        sse = get_sse_service()
+                        await sse.publish_event(request.trace_id, "credits:used", {
+                            "credits": credits,
+                            "cost_usd": float(response.cost_usd),
+                            "remaining_today_credits": commit_info.get("remaining_today_credits")
+                        })
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.warning(f"Credits recording failed: {e}")
     
     async def health_check(self) -> Dict[str, Any]:
         """Check health of all providers"""

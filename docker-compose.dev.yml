@@ -1,0 +1,66 @@
+version: '3.9'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: handywriterz-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: handywriterz-backend-dev
+    environment:
+      - ENVIRONMENT=development
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_RELOAD=true
+      - REDIS_URL=redis://redis:6379
+      # Uncomment DATABASE_URL to use Postgres in dev
+      # - DATABASE_URL=postgresql://handywriterz:handywriterz_pass@db:5432/handywriterz
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  frontend:
+    image: node:20-alpine
+    container_name: handywriterz-frontend-dev
+    working_dir: /app
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NODE_ENV=development
+    volumes:
+      - ./frontend:/app
+    command: sh -lc "npm -g i pnpm && pnpm install && pnpm dev"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+# Optional Postgres for dev (uncomment to enable)
+#  db:
+#    image: pgvector/pgvector:pg15
+#    container_name: handywriterz-db-dev
+#    environment:
+#      POSTGRES_DB: handywriterz
+#      POSTGRES_USER: handywriterz
+#      POSTGRES_PASSWORD: handywriterz_pass
+#    ports:
+#      - "5432:5432"
+#    volumes:
+#      - postgres_data:/var/lib/postgresql/data
+#    restart: unless-stopped
+
+volumes:
+  postgres_data:
+

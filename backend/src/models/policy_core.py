@@ -185,7 +185,7 @@ class PolicyRegistry:
                 max_context_tokens=12000,
                 reserved_output_tokens=1000,
                 chunk_size=1400,
-                chunk_overlap: int = 200,
+                chunk_overlap=200,
                 max_files=20,
                 max_chunks=28,
                 allow_browsing=False,

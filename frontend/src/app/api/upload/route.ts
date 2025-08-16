@@ -1,37 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+// Resolve backend URL robustly with multiple fallbacks.
+const BACKEND_URL =
+  process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8000';
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
-    
-    // Forward the form data to the backend
-    const backendResponse = await fetch(`${BACKEND_URL}/api/files`, {
+    const authHeader = request.headers.get('authorization') || undefined;
+
+    // Upload to backend files endpoint
+    const res = await fetch(`${BACKEND_URL}/api/files/upload`, {
       method: 'POST',
       body: formData,
+      headers: {
+        // Don't set Content-Type for FormData - browser will set boundary
+        ...(authHeader ? { 'Authorization': authHeader } : {}),
+      },
     });
 
-    if (!backendResponse.ok) {
-      throw new Error(`Backend upload failed: ${backendResponse.status}`);
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error(`Backend upload failed: ${res.status} ${res.statusText}`, errorText);
+      throw new Error(`Backend upload failed: ${res.status} ${res.statusText}: ${errorText}`);
     }
 
-    const result = await backendResponse.json();
-    return NextResponse.json(result);
+    const data = await res.json();
+    console.log('Backend upload successful:', data);
+    return NextResponse.json(data);
 
   } catch (error) {
     console.error('File upload error:', error);
     
-    // Fallback - return mock file IDs
-    const formData = await request.formData();
-    const files = formData.getAll('files') as File[];
-    
-    const mockResult = {
-      file_ids: files.map((file, index) => `mock-file-${file.name}-${Date.now()}-${index}`),
-      message: 'Files uploaded successfully (mock)',
-      success: true
-    };
-    
-    return NextResponse.json(mockResult);
+    // Return proper error - no mock fallbacks
+    return NextResponse.json(
+      { 
+        error: error instanceof Error ? error.message : 'Unknown upload error',
+        success: false 
+      }, 
+      { status: 500 }
+    );
   }
 }

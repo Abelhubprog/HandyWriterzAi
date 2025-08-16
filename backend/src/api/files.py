@@ -4,10 +4,16 @@ import uuid
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile, File
-from tusclient import client as tus_client
-from tusclient.exceptions import TusCommunicationError
+try:
+    from tusclient import client as tus_client  # type: ignore
+    from tusclient.exceptions import TusCommunicationError  # type: ignore
+except Exception:  # pragma: no cover
+    tus_client = None  # type: ignore
+    class TusCommunicationError(Exception):  # type: ignore
+        pass
 
 from ..services.security_service import get_current_user
+from ..services.object_storage import get_r2_storage
 # Celery worker in workers.chunk_queue_worker exposes 'process_chunk_for_turnitin'
 # Import lazily to avoid hard dependency if Celery isn't running
 try:
@@ -25,6 +31,7 @@ MAX_FILE_COUNT = 50
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# Direct multipart upload → Cloudflare R2 (S3-compatible)
 @router.post("/files/upload")
 async def upload_files(
     files: List[UploadFile] = File(...),
@@ -44,6 +51,13 @@ async def upload_files(
     file_ids = []
 
     try:
+        storage = None
+        try:
+            storage = get_r2_storage()
+        except Exception as e:
+            logger.error(f"Object storage not configured: {e}")
+            raise HTTPException(status_code=500, detail="Object storage not configured")
+
         for file in files:
             # Check file size
             file_content = await file.read()
@@ -53,26 +67,26 @@ async def upload_files(
                     detail=f"File {file.filename} exceeds the limit of {MAX_FILE_SIZE // (1024*1024)}MB."
                 )
 
-            # Generate unique file ID and save to disk
+            # Generate unique file ID and R2 object key
             file_id = str(uuid.uuid4())
-            file_extension = os.path.splitext(file.filename or "")[1] or ".txt"
-            saved_filename = f"{file_id}{file_extension}"
-            file_path = os.path.join(UPLOAD_DIR, saved_filename)
+            file_extension = os.path.splitext(file.filename or "")[1] or ".bin"
+            # Keep original name for convenience, but namespace by file_id
+            safe_name = (file.filename or "upload").replace("/", "_").replace("\\", "_")
+            object_key = f"uploads/{file_id}/{safe_name}"
 
-            # Save file to disk
-            with open(file_path, "wb") as f:
-                f.write(file_content)
+            # Upload to R2
+            storage.upload_bytes(object_key, file_content, content_type=file.content_type)
 
-            # Create file URL for frontend
-            file_url = f"/api/files/{file_id}"
+            # Build accessible URL
+            public_url = storage.build_public_url(object_key) or storage.generate_presigned_url(object_key, expires_in=3600)
 
             uploaded_files.append({
                 "file_id": file_id,
                 "filename": file.filename,
                 "size": len(file_content),
                 "mime_type": file.content_type,
-                "url": file_url,
-                "path": file_path
+                "url": public_url,
+                "key": object_key,
             })
 
             file_ids.append(file_id)
@@ -107,22 +121,24 @@ async def upload_files(
 
 @router.get("/files/{file_id}")
 async def get_file(file_id: str):
-    """
-    Serve uploaded files by their ID.
-    """
-    # Find the file in upload directory
-    for filename in os.listdir(UPLOAD_DIR):
-        if filename.startswith(file_id):
-            file_path = os.path.join(UPLOAD_DIR, filename)
-            if os.path.exists(file_path):
-                from fastapi.responses import FileResponse
-                return FileResponse(
-                    file_path,
-                    filename=filename,
-                    media_type="application/octet-stream"
-                )
-
-    raise HTTPException(status_code=404, detail="File not found")
+    """Serve file by ID via presigned URL or stream bytes from R2."""
+    try:
+        storage = get_r2_storage()
+        prefix = f"uploads/{file_id}/"
+        keys = storage.list_with_prefix(prefix)
+        if not keys:
+            raise HTTPException(status_code=404, detail="File not found")
+        # Pick the first object under this prefix
+        key = keys[0]
+        # Prefer redirect to a presigned URL
+        from fastapi.responses import RedirectResponse
+        url = storage.build_public_url(key) or storage.generate_presigned_url(key, expires_in=300)
+        return RedirectResponse(url=url, status_code=302)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to serve file {file_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve file")
 
 @router.post("/files/presign")
 async def create_upload(
@@ -132,39 +148,20 @@ async def create_upload(
     mime_type: str = Form(...),
     current_user: Optional[dict] = Depends(get_current_user),
 ):
-    """
-    Creates a new tus upload and returns the upload URL.
-    """
+    """Presign a direct PUT to R2 for browser uploads."""
     if filesize > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail=f"File size exceeds the limit of {MAX_FILE_SIZE // (1024*1024)}MB.")
 
-    # In a real application, you would check the user's file count against the limit here.
-    # For now, we'll just log it.
-    logger.info(f"User {current_user.get('id') if current_user else 'anonymous'} is uploading {filename}")
-
     try:
-        # Create a tus client
-        my_client = tus_client.TusClient(TUS_SERVER_URL)
-
-        # Create a new uploader
-        uploader = my_client.uploader(
-            file_path=None,  # We are not uploading from a file path, but from a stream
-            chunk_size=5 * 1024 * 1024,  # 5MB chunks
-            metadata={"filename": filename, "mime_type": mime_type},
-            # The client will handle the upload from the frontend
-        )
-
-        # The uploader object itself contains the upload URL
-        upload_url = uploader.url
-
-        return {"upload_url": upload_url}
-
-    except TusCommunicationError as e:
-        logger.error(f"Failed to communicate with tus server: {e}")
-        raise HTTPException(status_code=503, detail="Could not connect to the upload server.")
+        storage = get_r2_storage()
+        file_id = str(uuid.uuid4())
+        safe_name = (filename or "upload").replace("/", "_").replace("\\", "_")
+        key = f"uploads/{file_id}/{safe_name}"
+        url = storage.generate_presigned_put_url(key, content_type=mime_type, expires_in=3600)
+        return {"file_id": file_id, "key": key, "upload_url": url, "headers": {"Content-Type": mime_type}}
     except Exception as e:
-        logger.error(f"Failed to create upload: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create upload.")
+        logger.error(f"Failed to presign upload: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create presigned upload URL")
 
 
 @router.post("/files/notify")
@@ -209,3 +206,54 @@ async def notify_upload_complete(
     except Exception as e:
         logger.error(f"Failed to process completed upload: {e}")
         raise HTTPException(status_code=500, detail="Failed to process completed upload.")
+
+# ---- Added helpers and routes: POST /api/files (alias) and GET /api/files/{id}/meta ----
+from typing import Dict, Any  # added for metadata helper
+from fastapi.responses import JSONResponse  # added for meta endpoint response
+
+def _build_file_meta(file_id: str, file_path: str, original_name: Optional[str] = None, mime_type: Optional[str] = None) -> Dict[str, Any]:
+    size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+    filename = original_name or os.path.basename(file_path)
+    return {
+        "file_id": file_id,
+        "filename": filename,
+        "size": size,
+        "mime_type": mime_type or "application/octet-stream",
+        "url": f"/api/files/{file_id}",
+        "path": file_path,
+    }
+
+@router.post("/files")
+async def upload_files_alias(
+    files: List[UploadFile] = File(...),
+    current_user: Optional[dict] = Depends(get_current_user),
+):
+    # Alias handler for clients posting to /api/files
+    # Reuse the existing /files/upload logic
+    return await upload_files(files=files, current_user=current_user)
+
+@router.get("/files/{file_id}/meta")
+async def get_file_meta(file_id: str):
+    """
+    Return metadata for an uploaded file without serving bytes.
+    """
+    try:
+        storage = get_r2_storage()
+        prefix = f"uploads/{file_id}/"
+        keys = storage.list_with_prefix(prefix)
+        if not keys:
+            raise HTTPException(status_code=404, detail="File not found")
+        key = keys[0]
+        # Basic meta (size requires head_object; keep minimal)
+        url = storage.build_public_url(key) or None
+        return JSONResponse(content={
+            "file_id": file_id,
+            "key": key,
+            "url": url,
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get meta for {file_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch metadata")
+# ---- End additions ----

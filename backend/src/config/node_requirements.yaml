@@ -1,0 +1,28 @@
+nodes:
+  planner:
+    required_capabilities: [reasoning, function_calling]
+    preferred_capabilities: [long_context]
+    min_context_window: 128000
+    max_cost_tier: HIGH
+    reasoning_required: true
+
+  research:
+    required_capabilities: [reasoning]
+    preferred_capabilities: [long_context, web_search]
+    min_context_window: 128000
+    max_cost_tier: HIGH
+    reasoning_required: true
+
+  writer:
+    required_capabilities: [streaming, creative_writing]
+    preferred_capabilities: [long_context, function_calling]
+    min_context_window: 32000
+    max_cost_tier: HIGH
+    reasoning_required: false
+
+  formatter_advanced:
+    required_capabilities: [streaming]
+    preferred_capabilities: [function_calling]
+    min_context_window: 4000
+    max_cost_tier: MEDIUM
+    reasoning_required: false

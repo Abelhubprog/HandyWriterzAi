@@ -32,10 +32,9 @@ def get_workbench_service(db: Session = Depends(get_db)) -> WorkbenchService:
     return WorkbenchService(assignment_repo, submission_repo, artifact_repo, section_status_repo)
 
 @router.post("/assignments", response_model=CreateAssignmentResponse, status_code=status.HTTP_201_CREATED)
-@require_authorization(["admin", "tutor"]) # Only admins or agents can create assignments
 async def create_assignment(
     request: CreateAssignmentRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(require_authorization(["admin", "tutor"])),
     workbench_service: WorkbenchService = Depends(get_workbench_service),
     db: Session = Depends(get_db)
 ):
@@ -69,9 +68,8 @@ async def create_assignment(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @router.get("/assignments/next", response_model=ClaimNextResponse)
-@require_authorization(["checker", "admin"]) # Checkers or admins can claim next
 async def claim_next_assignment(
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(require_authorization(["checker", "admin"])),
     workbench_service: WorkbenchService = Depends(get_workbench_service),
     db: Session = Depends(get_db)
 ):
@@ -101,10 +99,9 @@ async def claim_next_assignment(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @router.get("/assignments/{assignment_id}/artifacts", response_model=ListArtifactsResponse)
-@require_authorization(["checker", "admin"]) # Checkers or admins can view artifacts
 async def list_assignment_artifacts(
     assignment_id: uuid.UUID,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(require_authorization(["checker", "admin"])),
     workbench_service: WorkbenchService = Depends(get_workbench_service),
     db: Session = Depends(get_db)
 ):
@@ -140,11 +137,10 @@ async def list_assignment_artifacts(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @router.post("/assignments/{assignment_id}/submissions", response_model=SubmitResultsResponse)
-@require_authorization(["checker"]) # Only checkers can submit results
 async def submit_assignment_results(
     assignment_id: uuid.UUID,
     request: SubmitResultsRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(require_authorization(["checker"])),
     workbench_service: WorkbenchService = Depends(get_workbench_service),
     db: Session = Depends(get_db)
 ):
@@ -191,10 +187,9 @@ async def submit_assignment_results(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @router.post("/assignments/{assignment_id}/verify", response_model=VerifyAssignmentResponse)
-@require_authorization(["admin"]) # Only admins can verify
 async def verify_assignment(
     assignment_id: uuid.UUID,
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(require_authorization(["admin"])),
     workbench_service: WorkbenchService = Depends(get_workbench_service),
     db: Session = Depends(get_db)
 ):

@@ -72,12 +72,8 @@ from src.agent.base import UserParams
 SIMPLE_SYSTEM_AVAILABLE = False
 logger.info("✅ Simple system permanently disabled - using advanced system only")
 
-# Import routing system (prefer the in-package unified processor; fallback to top-level module)
-try:
-    from src.agent.routing.unified_processor import UnifiedProcessor
-except ImportError:
-    # Fallback for environments where routing is located at backend/src/unified_processor.py
-    from src.unified_processor import UnifiedProcessor  # type: ignore
+# Import routing system from the canonical location only (no silent fallbacks)
+from src.agent.routing.unified_processor import UnifiedProcessor
 
 from src.db.database import (
     get_user_repository, get_conversation_repository,
@@ -86,6 +82,13 @@ from src.db.database import (
 
 # Import admin routes
 from src.routes.admin_models import router as admin_models_router
+from src.routes.admin_credits import router as admin_credits_router
+from src.routes.credits import router as user_credits_router
+from src.routes.stream import router as stream_router
+from src.routes.stream_extras import router as stream_extras_router
+from src.routes.chat_gateway import chat_gateway_router
+from src.routes.health import router as health_router
+from src.api.autonomy_v2 import router as autonomy_v2_router
 from src.api.files import router as files_router
 from src.services.error_handler import (
     error_handler, ErrorContext, ErrorCategory, ErrorSeverity,
@@ -114,15 +117,15 @@ try:
     strict_mode = os.getenv("FEATURE_REGISTRY_ENFORCED", "false").lower() == "true"
     registry_config_path = "src/config/model_config.yaml"
     pricing_config_path = "src/config/price_table.json"
-    
+
     initialize_registry(
         model_config_path=registry_config_path,
         price_table_path=pricing_config_path,
         strict=strict_mode
     )
-    
+
     logger.info(f"✅ ModelRegistry initialized (strict_mode: {strict_mode})")
-    
+
 except Exception as e:
     if os.getenv("FEATURE_REGISTRY_ENFORCED", "false").lower() == "true":
         logger.error(f"❌ ModelRegistry required but failed to initialize: {e}")
@@ -164,10 +167,17 @@ async def lifespan(app: FastAPI):
     """Manage application lifespan with comprehensive health checks."""
     logger.info("Starting HandyWriterz Revolutionary Backend...")
 
-    # Initialize database with system prompts
+    # store start time
+    app.state.start_time = time.time()
+
+    # Initialize database with system prompts (skip if using SQLite fallback or missing DB)
     try:
-        await init_database.main()
-        logger.info("✅ Database initialized with system prompts.")
+        db_url = os.getenv("DATABASE_URL", "")
+        if db_url and not db_url.startswith("sqlite"):
+            await init_database.main()
+            logger.info("✅ Database initialized with system prompts.")
+        else:
+            logger.info("ℹ️ Skipping init_database for SQLite/no DB in dev.")
     except Exception as e:
         logger.error(f"❌ Failed to initialize database with system prompts: {e}")
 
@@ -206,13 +216,44 @@ async def lifespan(app: FastAPI):
         startup_errors.append(f"Budget guard initialization failed: {e}")
         logger.error(f"❌ Budget guard initialization failed: {e}")
 
-    # Test Redis connection
+    # Diagnostic: pgvector + SQLAlchemy support check (common Py3.12 pitfall)
     try:
-        await redis_client.ping()
+        import sys as _sys
+        pyver = _sys.version.split()[0]
+        try:
+            from pgvector import sqlalchemy as _pgvec_sa  # type: ignore
+            logger.info(f"✅ pgvector.sqlalchemy available (Python {pyver})")
+        except Exception as _e:
+            logger.warning(
+                "⚠️  pgvector.sqlalchemy not available. If you need vector DB features, use Python 3.11 and pgvector>=0.4.5, "
+                "or add a fallback TypeDecorator. Current Python: %s; error: %s", pyver, _e
+            )
+    except Exception:
+        # Don't block startup on diagnostics
+        pass
+
+    # Test Redis connection (fail fast in managed deployments like Railway)
+    try:
+        # Use a timeout via wait_for to avoid long hangs
+        await asyncio.wait_for(redis_client.ping(), timeout=float(os.getenv("REDIS_PING_TIMEOUT", "2")))
         logger.info("✅ Redis connection successful")
     except Exception as e:
-        startup_errors.append(f"Redis connection failed: {e}")
         logger.error(f"❌ Redis connection failed: {e}")
+        raise RuntimeError(f"Redis connection failed: {e}")
+
+    # Warm up SSE Service (lazy client) to ensure Redis availability for publishers
+    try:
+        from src.services.sse_service import get_sse_service
+        sse_service = get_sse_service()
+        ok = await sse_service.ping()
+        if ok:
+            logger.info("✅ SSEService ping successful")
+        else:
+            startup_errors.append("SSEService ping failed")
+            logger.warning("⚠️ SSEService ping failed")
+    except Exception as e:
+        startup_errors.append(f"SSEService init failed: {e}")
+        logger.error(f"❌ SSEService init failed: {e}")
 
     # Test Database connection
     try:
@@ -241,28 +282,35 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("🚀 All systems operational - HandyWriterz backend ready!")
 
-    yield
-
-    logger.info("Shutting down HandyWriterz backend...")
-
-    # Graceful shutdown
-    shutdown_tasks = []
-
-    # Close database connections
     try:
-        db_manager.close()
-        logger.info("✅ Database connections closed")
-    except Exception as e:
-        logger.error(f"❌ Error closing database: {e}")
+        yield
+    finally:
+        logger.info("Shutting down HandyWriterz backend...")
 
-    # Close Redis connections
-    try:
-        await redis_client.close()
-        logger.info("✅ Redis connections closed")
-    except Exception as e:
-        logger.error(f"❌ Error closing Redis: {e}")
+        # Close database connections
+        try:
+            db_manager.close()
+            logger.info("✅ Database connections closed")
+        except Exception as e:
+            logger.error(f"❌ Error closing database: {e}")
 
-    logger.info("🔄 HandyWriterz backend shutdown complete")
+        # Close Redis connections
+        try:
+            await redis_client.close()
+            logger.info("✅ Redis connections closed")
+        except Exception as e:
+            logger.error(f"❌ Error closing Redis: {e}")
+
+        # Close SSEService client if initialized
+        try:
+            from src.services.sse_service import get_sse_service
+            sse_service = get_sse_service()
+            await sse_service.close()
+            logger.info("✅ SSEService closed")
+        except Exception as e:
+            logger.warning(f"⚠️ SSEService close encountered an issue: {e}")
+
+        logger.info("🔄 HandyWriterz backend shutdown complete")
 
 
 # Create FastAPI app with enhanced configuration
@@ -334,14 +382,20 @@ app.add_exception_handler(HTTPException, global_exception_handler.handle_http_ex
 
 # Include admin routes
 app.include_router(admin_models_router)
+app.include_router(admin_credits_router)
+app.include_router(user_credits_router)
+app.include_router(admin_credits_router)
 app.include_router(files_router, prefix="/api")
 from src.api.billing import router as billing_router
 from src.api.profile import router as profile_router
 from src.api.usage import router as usage_router
+from src.api.memory import router as memory_router
 
 app.include_router(billing_router, prefix="/api")
 app.include_router(profile_router, prefix="/api")
 app.include_router(usage_router, prefix="/api")
+app.include_router(memory_router, prefix="/api", tags=["memory"])  # Expose memory endpoints
+app.include_router(health_router)
 
 
 # Include payment system routes
@@ -370,6 +424,21 @@ app.include_router(workbench_router, prefix="/api", tags=["workbench"])
 app.include_router(workbench_auth_router, prefix="/api", tags=["workbench-auth"])
 app.include_router(workbench_ingestion_router, prefix="/api", tags=["workbench-ingestion"])
 # app.include_router(workbench_admin_router, prefix="/api", tags=["workbench-admin"]) # Temporarily commented out
+
+# SSE unified stream router
+app.include_router(stream_router)
+app.include_router(stream_extras_router)
+app.include_router(chat_gateway_router)
+
+# Feature-flagged mount for Autonomy V2 router under /api/v2
+try:
+    if settings.enable_autonomy_v2:
+        app.include_router(autonomy_v2_router, prefix="/api")
+        logger.info("✅ Autonomy V2 router mounted under /api/v2")
+    else:
+        logger.info("ℹ️ Autonomy V2 disabled (ENABLE_AUTONOMY_V2=false)")
+except Exception as e:
+    logger.warning(f"⚠️ Failed to mount Autonomy V2 router: {e}")
 
 
 # Mount static files for serving the SvelteKit frontend
@@ -644,9 +713,9 @@ async def get_features_status():
 
 # Admin Metrics Endpoint for Usage Tracking
 @app.get("/api/admin/metrics")
-@require_authorization("admin")
 @with_error_handling(ErrorCategory.SYSTEM, ErrorSeverity.LOW)
 async def get_admin_metrics(
+    current_user: Dict[str, Any] = Depends(require_authorization("admin")),
     tenant: Optional[str] = None,
     include_models: bool = True,
     include_providers: bool = True,
@@ -659,7 +728,7 @@ async def get_admin_metrics(
     try:
         # Get budget guard with Redis metrics
         budget_guard = get_budget_guard()
-        
+
         # Base metrics structure
         metrics = {
             "timestamp": time.time(),
@@ -672,7 +741,7 @@ async def get_admin_metrics(
             "providers": {},
             "models": {}
         }
-        
+
         # Get usage summary from Redis-backed budget guard
         if tenant:
             usage_summary = budget_guard.get_usage_summary(tenant)
@@ -691,16 +760,16 @@ async def get_admin_metrics(
             metrics["summary"] = {
                 "note": "Tenant-specific metrics available with ?tenant=<tenant_id>",
                 "total_requests": "aggregation_not_implemented",
-                "total_tokens": "aggregation_not_implemented", 
+                "total_tokens": "aggregation_not_implemented",
                 "total_cost": "aggregation_not_implemented"
             }
-        
+
         # Provider performance metrics
         if include_providers:
             try:
                 factory = get_factory()
                 providers = factory.list_providers()
-                
+
                 for provider_name in providers:
                     provider = factory.get_provider(provider_name)
                     if provider:
@@ -709,11 +778,11 @@ async def get_admin_metrics(
                             "default_model": getattr(provider, 'get_default_model', lambda: 'unknown')(),
                             "provider_type": provider.__class__.__name__
                         }
-                        
+
             except Exception as e:
                 logger.warning(f"Failed to get provider metrics: {e}")
                 metrics["providers"] = {"error": str(e)}
-        
+
         # Model registry metrics
         if include_models:
             try:
@@ -725,7 +794,7 @@ async def get_admin_metrics(
                         "models_by_provider": {},
                         "registry_status": "loaded"
                     }
-                    
+
                     # Group models by provider
                     for model_id, model_info in all_models.items():
                         provider = model_info.provider
@@ -738,11 +807,11 @@ async def get_admin_metrics(
                         })
                 else:
                     metrics["models"] = {"registry_status": "not_loaded"}
-                    
+
             except Exception as e:
                 logger.warning(f"Failed to get model metrics: {e}")
                 metrics["models"] = {"error": str(e)}
-        
+
         # System performance metrics
         metrics["performance"] = {
             "simple_system_available": False,  # Removed
@@ -750,14 +819,14 @@ async def get_admin_metrics(
             "redis_status": "unknown",
             "database_status": "unknown"
         }
-        
+
         # Test Redis connection
         try:
             await redis_client.ping()
             metrics["performance"]["redis_status"] = "healthy"
         except Exception:
             metrics["performance"]["redis_status"] = "unhealthy"
-        
+
         # Test database connection
         try:
             if db_manager.health_check():
@@ -766,9 +835,9 @@ async def get_admin_metrics(
                 metrics["performance"]["database_status"] = "unhealthy"
         except Exception:
             metrics["performance"]["database_status"] = "error"
-        
+
         return metrics
-        
+
     except Exception as e:
         logger.error(f"Admin metrics failed: {e}")
         raise HTTPException(
@@ -1201,7 +1270,7 @@ from src.services.embedding_service import get_embedding_service
 # Unified Chat Endpoint with Intelligent Routing
 from src.api.schemas.chat import ChatRequest, ChatResponse
 
-@app.post("/api/chat", response_model=ChatResponse, status_code=202)
+@app.post("/api/chat/advanced", response_model=ChatResponse, status_code=202)
 @require_rate_limit("chat_request")
 @validate_input()
 @with_error_handling(ErrorCategory.AGENT_FAILURE, ErrorSeverity.MEDIUM)
@@ -1223,18 +1292,95 @@ async def unified_chat_endpoint(
     Routing is based on request complexity analysis.
     """
     try:
-        # Process uploaded files
+        # Generate trace_id early for SSE events
+        trace_id = str(uuid.uuid4())
+
+        # Process uploaded files - REAL IMPLEMENTATION
         processed_files = []
+        file_context = ""
+
         if req.file_ids:
-            # In a real application, you would fetch the file details from the database
-            # using the file_ids. For now, we'll just log them.
-            logger.info(f"Processing files: {req.file_ids}")
+            logger.info(f"Loading content for {len(req.file_ids)} files: {req.file_ids}")
+
+            # Send file processing start event via SSEService
+            try:
+                from src.services.sse_service import get_sse_service
+                await get_sse_service().publish_file_processing(
+                    trace_id,
+                    status="processing_files",
+                    extra={
+                        "file_count": len(req.file_ids),
+                        "message": f"Processing {len(req.file_ids)} uploaded files..."
+                    }
+                )
+            except Exception as sse_error:
+                logger.warning(f"Failed to send file processing SSE event: {sse_error}")
+
+            # Import and use the file content service
+            from src.services.file_content_service import get_file_content_service
+            file_service = get_file_content_service()
+
+            try:
+                # Load actual file contents
+                file_contents = await file_service.load_file_contents(req.file_ids)
+                logger.info(f"Successfully loaded {len(file_contents)} files")
+
+                # Send file processing completion event via SSEService
+                try:
+                    successful_files = [fc for fc in file_contents if not fc.error]
+                    failed_files = [fc for fc in file_contents if fc.error]
+
+                    from src.services.sse_service import get_sse_service
+                    await get_sse_service().publish_file_processing(
+                        trace_id,
+                        status="files_processed",
+                        extra={
+                            "successful_count": len(successful_files),
+                            "failed_count": len(failed_files),
+                            "message": f"Processed {len(successful_files)} files successfully" + (f", {len(failed_files)} failed" if failed_files else "")
+                        }
+                    )
+                except Exception as sse_error:
+                    logger.warning(f"Failed to send file completion SSE event: {sse_error}")
+
+                # Format for prompt inclusion
+                file_context = file_service.format_files_for_prompt(file_contents)
+
+                # Store for unified processor
+                processed_files = [
+                    {
+                        "file_id": fc.file_id,
+                        "filename": fc.filename,
+                        "content": fc.content,
+                        "mime_type": fc.mime_type,
+                        "size": fc.size,
+                        "error": fc.error
+                    }
+                    for fc in file_contents
+                ]
+
+            except Exception as file_error:
+                logger.error(f"Failed to load file contents: {file_error}")
+
+                # Send file processing error event via SSEService
+                try:
+                    from src.services.sse_service import get_sse_service
+                    await get_sse_service().publish_file_processing(
+                        trace_id,
+                        status="file_processing_error",
+                        extra={
+                            "error": str(file_error),
+                            "message": f"Failed to process files: {file_error}"
+                        }
+                    )
+                except Exception as sse_error:
+                    logger.warning(f"Failed to send file error SSE event: {sse_error}")
+
+                # Include error in context so user knows what happened
+                file_context = f"\n=== FILE LOADING ERROR ===\nFailed to load uploaded files: {file_error}\n=== END ERROR ===\n"
 
         # Get user ID if available
         user_id = str(current_user.get("id")) if current_user else None
-
-        # Generate trace_id for frontend consistency
-        trace_id = str(uuid.uuid4())
 
         # Optionally normalize user_params before processing (feature-gated)
         _settings = get_settings()
@@ -1248,9 +1394,15 @@ async def unified_chat_endpoint(
                 # do-not-harm: fall back silently
                 normalized_params = req.user_params
 
+        # Combine user prompt with file context
+        enhanced_message = req.prompt
+        if file_context:
+            enhanced_message = f"{file_context}\n\nUSER REQUEST:\n{req.prompt}"
+            logger.info(f"Enhanced message with {len(processed_files)} files, total length: {len(enhanced_message)}")
+
         # Process using unified processor with streaming support
         result = await unified_processor.process_message(
-            message=req.prompt,
+            message=enhanced_message,
             files=processed_files,
             user_params=normalized_params,
             user_id=user_id,
@@ -1544,55 +1696,94 @@ async def start_writing(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# SSE streaming endpoint
-@app.get("/api/stream/{conversation_id}")
-async def stream_updates(conversation_id: str):
-    """Stream real-time updates for a conversation."""
+## Legacy SSE endpoint removed in favor of routes/stream.py canonical SSE router
+## (kept here as comment to avoid accidental reintroduction)
+#                        # Some publishers may already send dicts; ensure string -> dict
+#                        event_data: Dict[str, Any]
+#                        if isinstance(data_raw, str):
+#                            event_data = json.loads(data_raw)
+#                        elif isinstance(data_raw, dict):
+#                            event_data = data_raw
+#                        else:
+#                            # Unknown payload type; skip
+#                            continue
+#
+#                        # Ensure timestamp for client ordering if missing
+#                        if "ts" not in event_data:
+#                            event_data["ts"] = time.time()
+#
+#                        # Normalize legacy 'text' to 'content'
+#                        if "text" in event_data and "content" not in event_data:
+#                            event_data["content"] = event_data.pop("text")
+#
+#                        yield f"data: {json.dumps(event_data)}\n\n"
+#
+#                        # Close on terminal events
+## Legacy SSE endpoint removed in favor of routes/stream.py canonical SSE router
+## (kept here as comment to avoid accidental reintroduction)
+#                        # Some publishers may already send dicts; ensure string -> dict
+#                        event_data: Dict[str, Any]
+#                        if isinstance(data_raw, str):
+#                            event_data = json.loads(data_raw)
+#                        elif isinstance(data_raw, dict):
+#                            event_data = data_raw
+#                        else:
+#                            # Unknown payload type; skip
+#                            continue
+#
+#                        # Ensure timestamp for client ordering if missing
+#                        if "ts" not in event_data:
+#                            event_data["ts"] = time.time()
+#
+#                        # Normalize legacy 'text' to 'content'
+#                        if "text" in event_data and "content" not in event_data:
+#                            event_data["content"] = event_data.pop("text")
+#
+#                        yield f"data: {json.dumps(event_data)}\n\n"
+#
+#                        # Close on terminal events
+#                        evt_type = event_data.get("type")
+#                        if evt_type in ["workflow_complete", "workflow_failed", "workflow_finished", "done", "error"]:
+#                            break
+#
+#                    except Exception as e:
+#                        logger.error(f"Error processing SSE message: {e}")
+#                        # Send an error event but keep the stream alive
+#                        yield f"data: {json.dumps({'type': 'error', 'message': f'Event processing error: {str(e)}', 'ts': time.time()})}\n\n"
+#                        continue
+#
+#                except Exception as e:
+#                    logger.error(f"SSE stream error: {e}")
+#                    yield f"data: {json.dumps({'type': 'error', 'message': str(e), 'ts': time.time()})}\n\n"
+#
+#                finally:
+#                    # Always attempt to unsubscribe and close pubsub
+#                    try:
+#                        await pubsub.unsubscribe(channel)  # type: ignore[reportUnknownMemberType]
+#                    except Exception:
+#                        pass
+#                    try:
+#                        await pubsub.close()  # type: ignore[reportUnknownMemberType]
+#                    except Exception:
+#                        pass
+#                    logger.info(f"Unsubscribed from SSE channel: {channel} (disconnected={disconnected})")
 
-    async def generate_events():
-        """Generate SSE events from Redis pub/sub."""
-        pubsub = redis_client.pubsub()
-        channel = f"sse:{conversation_id}"
-
-        try:
-            await pubsub.subscribe(channel)
-            logger.info(f"Subscribed to SSE channel: {channel}")
-
-            # Send initial connection event
-            yield f"data: {json.dumps({'type': 'connected', 'conversation_id': conversation_id})}\n\n"
-
-            # Listen for messages
-            async for message in pubsub.listen():
-                if message["type"] == "message":
-                    try:
-                        # Parse the message data safely - SECURITY FIX
-                        event_data = json.loads(message["data"])
-                        yield f"data: {json.dumps(event_data)}\n\n"
-
-                        # Break if workflow is complete or failed
-                        if event_data.get("type") in ["workflow_complete", "workflow_failed"]:
-                            break
-
-                    except Exception as e:
-                        logger.error(f"Error processing SSE message: {e}")
-                        continue
-
-        except Exception as e:
-            logger.error(f"SSE stream error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
-
-        finally:
-            await pubsub.unsubscribe(channel)
-            logger.info(f"Unsubscribed from SSE channel: {channel}")
-
-    return StreamingResponse(
-        generate_events(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive"
-        }
-    )
+# Strong anti-buffering and keep-alive headers
+#headers = {
+#    "Cache-Control": "no-cache, no-transform",
+#    "Pragma": "no-cache",
+#    "Connection": "keep-alive",
+#    "X-Accel-Buffering": "no",
+#    "Keep-Alive": "timeout=60, max=1000",
+#    # Content-Type is set by media_type below
+#    # Transfer-Encoding is set automatically by ASGI server for streaming
+#}
+#
+#return StreamingResponse(
+#    generate_events(),
+#    media_type="text/event-stream; charset=utf-8",
+#    headers=headers
+#)
 
 
 
@@ -1839,11 +2030,14 @@ async def update_user_profile(
 @app.get("/api/users/{wallet_address}/conversations")
 async def get_user_conversations(
     wallet_address: str,
-    limit: int = 20,
+    page: int = 1,
+    page_size: int = 20,
+    sort_by: str = "created_at",
+    sort_dir: str = "desc",
     user_repo=Depends(get_user_repository),
     conversation_repo=Depends(get_conversation_repository)
 ):
-    """Get user's conversation history."""
+    """Get user's conversation history with pagination and sorting."""
     try:
         user = user_repo.get_user_by_wallet(wallet_address)
 
@@ -1853,10 +2047,18 @@ async def get_user_conversations(
                 detail="User not found"
             )
 
-        conversations = conversation_repo.get_user_conversations(str(user.id), limit)
+        # Sanitize page params
+        page = max(1, page)
+        page_size = max(1, min(100, page_size))
+        offset = (page - 1) * page_size
+
+        total = conversation_repo.count_user_conversations(str(user.id))
+        conversations = conversation_repo.get_user_conversations(
+            str(user.id), limit=page_size, offset=offset, sort_by=sort_by, sort_dir=sort_dir
+        )
 
         return {
-            "conversations": [
+            "data": [
                 {
                     "id": str(conv.id),
                     "title": conv.title,
@@ -1867,7 +2069,15 @@ async def get_user_conversations(
                     "error_message": conv.error_message
                 }
                 for conv in conversations
-            ]
+            ],
+            "meta": {
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "total_pages": (total + page_size - 1) // page_size,
+                "sort_by": sort_by,
+                "sort_dir": sort_dir
+            }
         }
 
     except HTTPException:
@@ -2062,6 +2272,33 @@ async def turnitin_webhook(payload: Dict[str, Any]):
     except Exception as e:
         logger.error(f"Turnitin webhook processing failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Lightweight readiness endpoint
+@app.get("/health/ready")
+async def health_ready():
+    """Fast readiness probe with Redis and DB checks.
+
+    Returns: {"redis":"ok|fail","db":"ok|fail","version":"<sha|dev>"}
+    """
+    # Redis
+    try:
+        await asyncio.wait_for(redis_client.ping(), timeout=1.5)  # keep <150ms target when healthy
+        redis_status = "ok"
+    except Exception:
+        redis_status = "fail"
+
+    # DB
+    try:
+        db_ok = db_manager.health_check()
+        db_status = "ok" if db_ok else "fail"
+    except Exception:
+        db_status = "fail"
+
+    # Version from env; fallback to dev
+    version = os.getenv("GIT_SHA") or os.getenv("RELEASE_SHA") or "dev"
+
+    return {"redis": redis_status, "db": db_status, "version": version}
 
 
 # Import vector storage dependencies
@@ -2295,23 +2532,20 @@ async def execute_writing_workflow(conversation_id: str, initial_state: HandyWri
         }
     )
 
+    # Import SSE service lazily to avoid circulars at import time
+    from src.services.sse_service import get_sse_service
+    sse = get_sse_service()
+
     try:
         logger.info(f"🚀 Starting revolutionary workflow for conversation: {conversation_id}")
 
         # Broadcast workflow start with enhanced data
-        await redis_client.publish(
-            f"sse:{conversation_id}",
-            json.dumps({
-                "type": "workflow_start",
-                "timestamp": time.time(),
-                "data": {
-                    "conversation_id": conversation_id,
-                    "user_id": initial_state.user_id,
-                    "estimated_duration": "8-12 minutes",
-                    "workflow_version": "2.0.0"
-                }
-            })
-        )
+        await sse.publish_workflow_start(conversation_id, {
+            "conversation_id": conversation_id,
+            "user_id": initial_state.user_id,
+            "estimated_duration": "8-12 minutes",
+            "workflow_version": "2.0.0"
+        })
 
         config = {"configurable": {"thread_id": conversation_id}}
 
@@ -2326,18 +2560,11 @@ async def execute_writing_workflow(conversation_id: str, initial_state: HandyWri
             chunk_count += 1
 
             # Enhanced progress broadcasting
-            await redis_client.publish(
-                f"sse:{conversation_id}",
-                json.dumps({
-                    "type": "workflow_progress",
-                    "timestamp": time.time(),
-                    "data": {
-                        **chunk,
-                        "chunk_number": chunk_count,
-                        "elapsed_time": time.time() - workflow_start_time
-                    }
-                })
-            )
+            await sse.publish_workflow_progress(conversation_id, {
+                **chunk,
+                "chunk_number": chunk_count,
+                "elapsed_time": time.time() - workflow_start_time
+            })
 
             # Log major progress milestones
             if "current_node" in chunk:
@@ -2346,20 +2573,13 @@ async def execute_writing_workflow(conversation_id: str, initial_state: HandyWri
         workflow_duration = time.time() - workflow_start_time
 
         # Broadcast successful completion
-        await redis_client.publish(
-            f"sse:{conversation_id}",
-            json.dumps({
-                "type": "workflow_complete",
-                "timestamp": time.time(),
-                "data": {
-                    "conversation_id": conversation_id,
-                    "status": "completed",
-                    "duration_seconds": workflow_duration,
-                    "chunks_processed": chunk_count,
-                    "completion_message": "Academic document generated successfully."
-                }
-            })
-        )
+        await sse.publish_workflow_complete(conversation_id, {
+            "conversation_id": conversation_id,
+            "status": "completed",
+            "duration_seconds": workflow_duration,
+            "chunks_processed": chunk_count,
+            "completion_message": "Academic document generated successfully."
+        })
 
         logger.info(f"✅ Workflow completed successfully for {conversation_id} in {workflow_duration:.2f}s")
 
@@ -2378,23 +2598,16 @@ async def execute_writing_workflow(conversation_id: str, initial_state: HandyWri
         is_recoverable = recovery_strategy.get("retry_recommended", False)
 
         # Broadcast workflow failure with recovery information
-        await redis_client.publish(
-            f"sse:{conversation_id}",
-            json.dumps({
-                "type": "workflow_failed",
-                "timestamp": time.time(),
-                "data": {
-                    "conversation_id": conversation_id,
-                    "error": str(e),
-                    "error_id": error_data.get("error_id"),
-                    "error_type": type(e).__name__,
-                    "duration_seconds": workflow_duration,
-                    "recoverable": is_recoverable,
-                    "recovery_strategy": recovery_strategy,
-                    "support_message": "Our team has been notified. Please try again or contact support."
-                }
-            })
-        )
+        await sse.publish_workflow_failed(conversation_id, {
+            "conversation_id": conversation_id,
+            "error": str(e),
+            "error_id": error_data.get("error_id"),
+            "error_type": type(e).__name__,
+            "duration_seconds": workflow_duration,
+            "recoverable": is_recoverable,
+            "recovery_strategy": recovery_strategy,
+            "support_message": "Our team has been notified. Please try again or contact support."
+        })
 
         # Re-raise if not recoverable
         if not is_recoverable:

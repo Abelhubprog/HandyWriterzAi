@@ -17,7 +17,7 @@ from starlette.types import ASGIApp
 
 from ..services.tracing import get_tracer, TraceContext
 from ..services.cost_tracker import CostTracker
-from ..config.settings import get_settings
+from ..config import get_settings
 
 
 logger = logging.getLogger(__name__)

@@ -10,6 +10,9 @@ import { apiClient } from '@/services/advancedApiClient';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Clock, Brain, Search, FileText, CheckCircle } from 'lucide-react';
+import { ProgressChips } from '@/components/ProgressChips';
+import { StreamingStatus } from '@/components/StreamingStatus';
+import { SSEErrorOverlay } from '@/components/SSEErrorOverlay';
 
 interface Message {
   id: string;
@@ -21,6 +24,7 @@ interface Message {
     mime: string;
     name: string;
     size: number;
+    file_id?: string;
   }>;
   writeupType?: string;
 }
@@ -84,10 +88,9 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
         case 'writer_started':
           updateAgentStatus('Composing...');
           break;
+        // token/content appended via apiClient.streamResponse handler to avoid double appends
         case 'token':
         case 'content':
-          if (evt.delta) updateStreamingMessage((streamingState.streamingMessage || '') + evt.delta);
-          if (evt.text) updateStreamingMessage((streamingState.streamingMessage || '') + evt.text);
           break;
         case 'evaluator_started':
           updateAgentStatus('Evaluating...');
@@ -146,9 +149,11 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
       mime: string;
       name: string;
       size: number;
+      file_id?: string;
     }>;
   }) => {
     if (streamingState.isStreaming) {
+      console.log('Already streaming, ignoring duplicate request');
       return;
     }
 
@@ -182,10 +187,17 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
       updateAgentStatus('Processing request...');
       updateStreamingMessage(''); // reset buffer
 
+      // Extract actual backend file IDs (not URLs)
+      const file_ids = payload.attachments
+        ?.map(a => a.file_id)
+        .filter(Boolean) || [];
+
+      console.log('Sending chat request with file_ids:', file_ids);
+
       const requestBody = {
         prompt: payload.content,
         mode: payload.writeupType || "general",
-        file_ids: payload.attachments?.map(a => a.url) || [],
+        file_ids: file_ids, // Use actual backend file IDs
         user_params: { 
           writeupType: payload.writeupType,
           citationStyle: 'Harvard',
@@ -199,7 +211,7 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
       const { data: result } = await apiClient.chat(requestBody);
 
       // Add assistant message placeholder; final text will be appended as stream
-      addMessage({
+      const assistantMessageId = addMessage({
         conversationId: currentConversationId,
         role: 'assistant',
         content: '', // Will be populated by streaming
@@ -209,12 +221,15 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
       const streamTraceId = result.trace_id || result.conversation_id || newTraceId;
       setTraceId(streamTraceId);
       
-      // Start SSE streaming from backend
-      apiClient.streamResponse(`/api/stream/${streamTraceId}`, { method: 'GET' }, (chunk) => {
+      // Start SSE streaming via Next proxy route
+      apiClient.streamResponse(`/api/chat/stream/${streamTraceId}`, { method: 'GET' }, (chunk) => {
         console.log('SSE chunk received:', chunk);
         
         // Handle different event types
         switch (chunk.type) {
+          case 'connected':
+            console.log('SSE connection established');
+            break;
           case 'planning_started':
             updateAgentStatus('Planning the approach...');
             break;
@@ -239,19 +254,54 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
           case 'formatter_started':
             updateAgentStatus('Formatting...');
             break;
+          case 'workflow_complete':
+          case 'workflow_finished':
+            console.log('Workflow completed successfully');
+            // Commit the streaming message to the conversation
+            if (streamingState.streamingMessage && assistantMessageId) {
+              updateMessage(assistantMessageId, {
+                content: streamingState.streamingMessage
+              });
+            }
+            updateAgentStatus('Complete');
+            stopStreaming();
+            break;
+          case 'workflow_failed':
+            console.error('Workflow failed:', chunk.error);
+            setError(chunk.error || 'Workflow failed');
+            stopStreaming();
+            break;
           case 'workflow_finished':
           case 'done':
             stopStreaming();
+            break;
+          case 'parse_error':
+            console.error('SSE parse error:', chunk.error);
+            // Don't stop streaming for parse errors, just log them
             break;
           case 'error':
             console.error('SSE error:', chunk.error);
             setError(chunk.error || 'Unknown streaming error');
             stopStreaming();
             break;
+          default:
+            // Log unknown event types for debugging
+            console.log('Unknown SSE event type:', chunk.type, chunk);
         }
       }).catch(error => {
         console.error('SSE streaming error:', error);
-        setError(error.message || 'Streaming connection failed');
+        
+        // Provide more specific error messages
+        let errorMessage = 'Streaming connection failed';
+        if (error.code === 'STREAM_TIMEOUT') {
+          errorMessage = 'Request timed out - please try again';
+        } else if (error.code === 'STREAM_CONNECTION_FAILED') {
+          errorMessage = 'Could not connect to server - check your connection';
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        setError(errorMessage);
         stopStreaming();
       });
       // Do not stopStreaming here; the hook will close on workflow_finished
@@ -279,6 +329,8 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
 
   return (
     <div className={cn("h-full flex flex-col", className)}>
+      {/* SSE error overlay */}
+      {stream.lastError && <SSEErrorOverlay message={stream.lastError} />}
       <div className="flex-1 flex items-center justify-center px-4 overflow-hidden">
         <div className="w-full max-w-4xl h-full flex flex-col">
           {!activeConversation?.messages || activeConversation.messages.length === 0 ? (
@@ -313,8 +365,17 @@ export function ChatPane({ conversationId, className, onConversationCreate }: Ch
                     <Clock className="h-3 w-3" />
                     <span>Generating your content...</span>
                   </div>
+                  <ProgressChips events={stream.events} />
                 </div>
               )}
+
+              {/* Live connection status bar */}
+              <StreamingStatus 
+                events={stream.events}
+                isConnected={stream.isConnected}
+                lastHeartbeatTs={stream.lastHeartbeatTs}
+                totalCost={0}
+              />
               
               <div className="flex-1 overflow-hidden">
                 <div

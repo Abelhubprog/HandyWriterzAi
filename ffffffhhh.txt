@@ -1,0 +1,219 @@
+Root cause analysis for chat UI falling back to mocked responses, missing uploads in prompt, and non-LLM-like behavior, with concrete fixes
+
+Findings in frontend
+
+1) Chat page wiring and data flow
+- [frontend/src/app/chat/page.tsx](frontend/src/app/chat/page.tsx:1) renders ChatPane and Sidebar driven by Zustand store, but does not itself implement API calls.
+- The demo chat UI used at demo day is [frontend/src/components/chat/DemoReadyChatInterface.tsx](frontend/src/components/chat/DemoReadyChatInterface.tsx:1) which integrates with the custom hook useAdvancedChat.
+
+2) Actual send logic and backend target
+- The send/stream logic lives in [frontend/src/hooks/useAdvancedChat.ts](frontend/src/hooks/useAdvancedChat.ts:1).
+  - Posts JSON to Next.js route /api/chat, not directly to backend at localhost:8000
+    - fetch('/api/chat', POST) [useAdvancedChat.ts.mutationFn()](frontend/src/hooks/useAdvancedChat.ts:170)
+  - Assumes Next.js server route will proxy to backend and return ChatResponse fields like success, response, conversation_id, system_used, processing_time, sources etc. This matches a mocked backend shape often returned by fallback code.
+  - WebSocket/SSE stream is referenced via useStream(currentTraceId) but that hook implementation isn’t included in provided files. There is a separate generic hook useChatStream, but useAdvancedChat is using useStream from hooks/useStream.ts, not useChatStream [useAdvancedChat.ts imports](frontend/src/hooks/useAdvancedChat.ts:3). This likely means no real SSE tie-in unless hooks/useStream.ts proxies to backend /api/stream/{conversation_id}. If that hook is stubbed, streaming in the UI is fake or silent.
+
+3) File uploads flow in chat
+- useAdvancedChat calls a separate endpoint /api/process-files after reading fileIds from useFileUpload [useAdvancedChat.ts.sendMessage()](frontend/src/hooks/useAdvancedChat.ts:282).
+  - It does not attach files to the chat POST; instead starts a “process-files” request and continues immediately without waiting for ingestion callback. Hence the user’s complaint: “file uploads are not seen once you upload, write a prompt and hit send.”
+
+4) Demo scaffolding remains
+- DemoReadyChatInterface simulates completion after 13.5 minutes and treats sendMessage as a trigger, then calls simulateCompletion() for a fully mocked result [DemoReadyChatInterface.tsx.handleStartDissertation() and simulateCompletion()](frontend/src/components/chat/DemoReadyChatInterface.tsx:198). This UI is demo-oriented, not production chat.
+- The hook useAdvancedChat also sets routingDecision.system based on response.system_used which includes 'simple'|'advanced'|'hybrid' [useAdvancedChat.ts.onSuccess](frontend/src/hooks/useAdvancedChat.ts:192). But backend has removed simple/hybrid. If the Next.js API route returns an outdated shape or hard-coded values, UI will represent mocked behavior.
+
+5) Advanced API client exists but is unused by chat page
+- [frontend/src/services/advancedApiClient.ts](frontend/src/services/advancedApiClient.ts:1) supports chat('/api/chat') against configurable NEXT_PUBLIC_API_URL, uploadFiles, and streamResponse. The chat page is not using this client; it hits Next.js API routes relative to the app instead of backend base URL, causing double server translation and potential mock.
+
+6) Next.js API routes for chat
+- Next.js routes present:
+  - app/api/chat/route.ts
+  - app/api/chat/send/route.ts
+  - app/api/chat/stream/[traceId]/route.ts
+- useAdvancedChat only uses /api/chat and /api/process-files; it doesn’t use /api/chat/send or /api/chat/stream. Given prior findings of mocked pathways, these Next routes may currently return demo responses or “success” placeholders.
+
+Conclusion: The chat UI calls Next.js API routes that likely return mocked “success” data, not the backend FastAPI /api/chat. File uploads aren’t included in the chat request; they are “processed” in parallel without inclusion in the request context. Streaming is not wired to backend SSE /api/stream/{conversation_id} but to a local hook that may be a stub. Thus users see fallback responses and missing files.
+
+Backend alignment check
+
+- Backend unified chat endpoint is /api/chat on FastAPI and SSE stream is /api/stream/{conversation_id} [backend/src/main.py routes; unified processor]. The frontend must call the FastAPI base URL and pass conversation_id for streaming. Current frontend posts to Next.js /api/chat and uses local stream hook; mismatch.
+
+Fix plan
+
+A) Wire frontend chat directly to backend using AdvancedApiClient
+1) Replace fetch('/api/chat') with apiClient.chat against NEXT_PUBLIC_API_URL
+- Change in [useAdvancedChat.ts.mutationFn()](frontend/src/hooks/useAdvancedChat.ts:170-187):
+  - Use apiClient.chat(request) and parse response; handle status/errors via client.
+  - Ensure NEXT_PUBLIC_API_URL is set to http://localhost:8000.
+2) Use streamResponse for SSE
+- After receiving response containing conversation_id, call apiClient.streamResponse(`/api/stream/${conversation_id}`, { method: 'GET' }, onChunk), updating messages incrementally, instead of relying on the unknown useStream hook.
+
+B) Attach uploaded files to the chat request path the backend expects
+- Backend UnifiedProcessor expects files or file references via file_ids or uploaded_docs. Confirm backend contract:
+  - We already saw file_ids in ChatRequest type defined by UI; ensure backend /api/chat accepts that and maps to uploaded_docs retrieval. If not, update to send files as multipart to backend /api/files first, then pass file_ids in the same /api/chat request. Do not run a separate /api/process-files that doesn’t sync with the chat request.
+- Update [useAdvancedChat.ts.sendMessage()](frontend/src/hooks/useAdvancedChat.ts:282-301,303-329):
+  - Remove separate /api/process-files call, or wait for ingestion completion and include the same IDs in chat body.
+  - Display attached files in messages UI from store/useChatStore or local messages metadata.
+
+C) Remove demo scaffolding in DemoReadyChatInterface for production
+- In [DemoReadyChatInterface.tsx](frontend/src/components/chat/DemoReadyChatInterface.tsx:198-224,226-277):
+  - Do not simulate completion nor set demo prompt unless in DEMO_MODE.
+  - Use the same Advanced chat hook streaming and messages display; ensure the component shows server tokens.
+
+D) Ensure use cases and General mode
+- The API request currently includes mode: string. Define valid modes mapping to backend ModelRole/user params:
+  - e.g. 'general' as default; 'dissertation', 'thesis', 'research_paper', etc.
+- In the composer UI, add a General use case option and keep as default; if a selected use case is not handled by backend, backend should safely route to advanced general pathway with policy reasons.
+
+E) Next.js API routes deprecation or true proxy
+- If keeping Next.js routes, implement them as thin proxies to backend (fetch to NEXT_PUBLIC_API_URL) with no mock fallback or static demo responses. Prefer removing them and using apiClient directly in client code to cut indirection in development.
+- Ensure /api/chat/stream/[traceId] proxies to backend /api/stream/{id} and supports streaming Content-Type text/event-stream without buffering.
+
+F) Display of uploaded files in chat UI
+- Ensure ChatPane/Composer components render selected files and that after send, the files are associated with that user message. Use store/useChatStore to keep a per-message list of file tiles. On successful backend message creation, persist association via conversationStore.
+
+Minimal concrete code changes (frontend)
+
+1) Switch chat POST to AdvancedApiClient and remove Next.js dependency
+
+File: [frontend/src/hooks/useAdvancedChat.ts](frontend/src/hooks/useAdvancedChat.ts:160)
+- Add import
+  import { apiClient } from '@/services/advancedApiClient';
+- Replace mutationFn:
+
+Old:
+  const response = await fetch('/api/chat', { ... });
+  if (!response.ok) throw ...
+  return response.json();
+
+New:
+  const { data } = await apiClient.chat(request);
+  return data;
+
+2) Start streaming from backend SSE after getting conversation_id
+
+File: [frontend/src/hooks/useAdvancedChat.ts](frontend/src/hooks/useAdvancedChat.ts:188)
+- After onSuccess, if response.conversation_id:
+  await apiClient.streamResponse(`/api/stream/${response.conversation_id}`, { method: 'GET' }, (evt) => {
+    if (evt.type === 'stream' && evt.text) { append to AI message content; }
+    if (evt.type === 'workflow_finished') { setIsProcessing(false); }
+    if (evt.type === 'error') { handleError(new Error(evt.error)); }
+  });
+
+3) Send files with chat request, remove separate process-files call
+
+File: [frontend/src/hooks/useAdvancedChat.ts.sendMessage](frontend/src/hooks/useAdvancedChat.ts:282-301,319-329)
+- Remove process-files POST or gate it behind a feature flag until you wire ingestion callback and sync.
+- Ensure file_ids are included in request: already present.
+- Optionally block send until file upload is completed and file_ids available.
+
+4) Demo component: disable simulateCompletion
+
+File: [frontend/src/components/chat/DemoReadyChatInterface.tsx](frontend/src/components/chat/DemoReadyChatInterface.tsx:198-224,226-277)
+- Guard simulateCompletion call behind DEMO_MODE flag:
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === 'true') setTimeout(simulateCompletion, 13.5 * 60 * 1000);
+  else do nothing; show streaming messages UI instead.
+- Avoid default demoPrompt in production mode.
+
+5) Env
+
+- frontend/.env.development:
+  NEXT_PUBLIC_API_URL=http://localhost:8000
+
+Validation checklist
+
+- Start backend at 8000; visit http://localhost:3000/chat.
+- Upload 1-2 files via RevolutionaryFileUploader; confirm getFileIds returns IDs.
+- Enter prompt, select Document Type “General” or a specific use case; click send.
+- Observe AI message renders and grows as SSE chunks arrive; no “generated successfully” placeholders.
+- Verify Developer Tools network: POST http://localhost:8000/api/chat and GET event stream from http://localhost:8000/api/stream/{conversation_id}.
+- Files tiles remain associated with the user message; conversation history shows them.
+- Try a use case not listed; mode=general is sent; backend routes to advanced and returns valid output.
+
+Why it was failing before
+
+- The UI posted to Next.js /api/chat returning mocked/fallback structures rather than to backend FastAPI unified chat.
+- Streaming was handled by a local hook (useStream) not shown to hit backend SSE.
+- Files were kicked to a separate endpoint without being included in the chat request context, so the backend didn’t see them with the prompt.
+- Demo components simulated a result after a timer, masking real IO.
+
+If you want, I can implement the specific diffs to use AdvancedApiClient.
+chat + streamResponse in useAdvancedChat, remove the separate process-files call, and gate demo simulation behind an env flag so the chat behaves like a proper LLM client and uses the advanced agentic backend only.
+
+
+Implementing full step-by-step streaming of agent workflow
+
+Commit-ready plan aligned to your “stream all steps as agents write” requirement.
+
+Backend changes (SSE publishing points)
+- Unified Processor
+  - Add step emits surrounding each orchestration phase in [`unified_processor.process_advanced()`](backend/src/agent/routing/unified_processor.py:1):
+    - publish('planning_started', {...})
+    - publish('search_started', {...})
+    - publish('verify_started', {...})
+    - publish('writer_started', {...})
+    - publish('evaluator_started', {...})
+    - publish('formatter_started', {...})
+    - publish('cost_update', {...}) periodically
+    - publish('workflow_finished', {...}) at end
+- Search nodes
+  - In each of [`agent/nodes/search_openai.py`](backend/src/agent/nodes/search_openai.py:1), [`search_perplexity.py`](backend/src/agent/nodes/search_perplexity.py:1), [`search_scholar.py`](backend/src/agent/nodes/search_scholar.py:1), emit:
+    - publish('search_progress', { provider, fetched, total_estimate })
+    - publish('sources_update', { sources: [...] }) snapshot on each batch
+- Writer node
+  - In [`agent/nodes/writer_migrated.py`](backend/src/agent/nodes/writer_migrated.py:1) or [`writer.py`](backend/src/agent/nodes/writer.py:1):
+    - Call the LLM with streaming enabled; for each chunk:
+      - publish('token', { delta, cursor })
+    - When the writer constructs inline citations:
+      - publish('citation_anchor', { source_id, label, position })
+- Evaluator and Formatter
+  - In [`agent/nodes/evaluator_advanced.py`](backend/src/agent/nodes/evaluator_advanced.py:1):
+    - publish('evaluator_feedback', { level, message })
+  - In [`agent/nodes/formatter_advanced.py`](backend/src/agent/nodes/formatter_advanced.py:1):
+    - publish('node_status', { node:'formatter', status:'progress', ... })
+- SSE constraints
+  - Ensure event ids are monotonic and conversation_id always present.
+  - Preserve schema: token is diffs only; workflow_finished includes final_text for reconciliation.
+
+Frontend changes (single stream path, token coalescing, live panels)
+- Hook unification
+  - Keep the canonical streaming hook at [`hooks/useStream.ts`](frontend/src/hooks/useStream.ts:58-149).
+  - Extend it to parse new events: planning_started, search_started, search_progress, verify_started, writer_started, evaluator_started, evaluator_feedback, formatter_started, sources_update, token, cost_update, workflow_finished, error.
+  - Add requestAnimationFrame-based token coalescing to render at 60 fps.
+- UI integration
+  - In [`components/ChatPane.tsx`](frontend/src/components/ChatPane.tsx:169):
+    - Remove internal POST to /api/chat and use useAdvancedChat.sendMessage.
+    - Render:
+      - Header with phase indicator and ETA progress bar driven by planning_started and node_status/search_progress.
+      - Main text area: aiMessage.content + writerBuffer + blinking cursor.
+      - Right panel: live sources (updated on sources_update) and timeline (node_status + evaluator feedback).
+  - In [`components/chat/DownloadMenu.tsx`](frontend/src/components/chat/DownloadMenu.tsx:14-16):
+    - Keep as-is; enable when workflow_finished arrives.
+- API routes
+  - Ensure [`app/api/chat/route.ts`](frontend/src/app/api/chat/route.ts:43) proxies directly to backend /api/chat with no schema mutation.
+  - Ensure [`app/api/chat/stream/[traceId]/route.ts`](frontend/src/app/api/chat/stream/[traceId]/route.ts:1) passes event type/id and text/event-stream headers unchanged.
+  - Avoid using app/api/chat/send/route.ts from the UI to prevent duplicate streaming semantics.
+
+Performance and UX
+- Token coalescing and memoized source list prevent re-render thrash on long responses.
+- Timeline capped to last N=300 events; auto-scroll with “Jump to live” when user scrolls up.
+- Error events show non-blocking toast; partial output preserved.
+
+Outcome
+- Users will see every step on-screen while the system plans, searches, verifies, writes, evaluates, and formats—mirroring Perplexity-like progressive streaming but tailored to HandyWriterz’ agent graph and evidence handling.
+
+Per-step streaming plan locked. Ready to implement code diffs next.
+
+Summary of what will be implemented:
+- Backend will emit granular SSE events for every stage: planning_started, search_started/progress, sources_update, verify_started, writer_started with token deltas, citation_anchor, evaluator_started/feedback, formatter_started, cost_update, workflow_finished, error. Hooks added in the advanced path and relevant nodes.
+- Frontend will unify to a single streaming hook (useStream) with token coalescing at 60 fps and a single sender (useAdvancedChat). ChatPane will render:
+  - Live “phase + ETA” header
+  - Streaming writeup with a blinking cursor
+  - Live sources panel updated from sources_update
+  - Timeline showing node_status and evaluator feedback
+- Next.js API routes will strictly proxy chat and SSE to the backend without altering schemas or buffering events.
+- File IDs will be included in the chat POST body; no separate process-files during send.
+
+Result:
+- Users will see all agent steps streamed in real time while the writeup is generated, similar to Perplexity but tailored to HandyWriterz orchestration and evidence model. The UI will reflect research, verification, writing, evaluation, and formatting, including live sources and cost updates.
+
+Proceeding to code diffs on approval.

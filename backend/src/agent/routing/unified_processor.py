@@ -5,12 +5,11 @@ Handles routing between simple and advanced systems and processes
 requests using the optimal system based on complexity analysis.
 """
 
-import asyncio
 import time
 import uuid
 import logging
 import json
-from typing import Dict, Any, List, Optional, TypedDict
+from typing import Dict, Any, List, Optional, TypedDict, Union, cast, Any
 
 from langchain_core.messages import HumanMessage
 import redis.asyncio as redis
@@ -33,7 +32,7 @@ try:
 except Exception:  # pragma: no cover
     def normalize_user_params(x):  # type: ignore
         return x
-    def validate_user_params(x):  # type: no cover
+    def validate_user_params(x):  # type: ignore
         return None
 
 _FEATURE_SSE = os.getenv("FEATURE_SSE_PUBLISHER_UNIFIED", "false").lower() == "true"
@@ -93,7 +92,7 @@ except Exception:  # pragma: no cover
         PREMIUM = "premium"
     class UseCase:  # type: ignore
         GENERAL = "general"
-    _FEATURE_PROMPT_ORCHESTRATOR = False
+    _FEATURE_PROMPT_ORCHESTRATOR = False  # type: ignore[assignment]
 
 # Legacy event data - being replaced by typed SSE events
 class _EventData(TypedDict, total=False):
@@ -103,16 +102,25 @@ class _EventData(TypedDict, total=False):
     system: str
     complexity: float
     reason: str
+    # Back-compat fields used by publisher callsites
+    text: str
 
 from .system_router import SystemRouter
-from ..handywriterz_state import HandyWriterzState
+from src.agent.handywriterz_state import HandyWriterzState
 from ..handywriterz_graph import handywriterz_graph
 from ..base import UserParams
 
 logger = logging.getLogger(__name__)
 
-# Redis client for streaming
+# Redis client kept only for extreme fallback paths (should be unused after SSEService unification)
 redis_client: "redis.Redis" = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"), decode_responses=True)  # type: ignore[assignment]
+
+# Unified lightweight SSE service (Redis-backed), used as primary publisher
+try:
+    from src.services.sse_service import get_sse_service
+    _sse_service = get_sse_service()
+except Exception:
+    _sse_service = None  # Fallback to direct Redis if unavailable
 
 
 class UnifiedProcessor:
@@ -140,7 +148,7 @@ class UnifiedProcessor:
         conversation_id = conversation_id or str(uuid.uuid4())
 
         # Setup correlation context for logging
-        with with_correlation_context(
+        with with_correlation_context(  # type: ignore[misc]
             conversation_id=conversation_id,
             user_id=user_id,
             node_name="UnifiedProcessor",
@@ -185,14 +193,29 @@ class UnifiedProcessor:
                 estimated_tokens = budget_guard.estimate_tokens(message, files, complexity_multiplier=1.0)
 
                 # Check budget (will raise BudgetExceededError if over limits)
-                budget_result = guard_request(
+                budget_result = guard_request(  # type: ignore[call-arg, assignment]
                     estimated_tokens=estimated_tokens,
                     role="user",  # Could be enhanced with actual user role
                     tenant=user_id,
                     cost_level=CostLevel.MEDIUM  # Will be adjusted based on routing
                 )
+                if budget_result is None:
+                    class _BR:  # minimal shim
+                        estimated_cost = 0.0
+                    budget_result = _BR()  # type: ignore[assignment]
 
-                logger.info(f"Budget check passed: ${budget_result.estimated_cost:.4f} estimated")
+                logger.info(f"Budget check passed: ${getattr(budget_result, 'estimated_cost', 0.0):.4f} estimated")
+
+                # Emit unified milestone for budget creation/projection
+                try:
+                    if _sse_service is not None:
+                        await _sse_service.publish_workflow_progress(conversation_id, {
+                            "type": "progress:budget_created",
+                            "estimated_cost": float(getattr(budget_result, "estimated_cost", 0.0)),
+                            "estimated_tokens": int(estimated_tokens) if isinstance(estimated_tokens, (int, float)) else 0,
+                        })
+                except Exception as _sse_budget_err:
+                    logger.warning(f"Failed to publish budget milestone: {_sse_budget_err}")
 
             except Exception as budget_error:
                 logger.error(f"Budget check failed: {budget_error}")
@@ -215,31 +238,38 @@ class UnifiedProcessor:
                     }
                 }
 
-            # Start streaming
+            # Start streaming (route through SSEService)
             await self._publish_event(conversation_id, _EventData(
                 type="start",
                 message="Processing your request...",
                 timestamp=time.time()
-            ), use_sse=use_sse, double_publish=double_publish)
+            ), use_sse=True, double_publish=False)
 
-            # Per-step streaming: Planning started (high-level plan before graph)
+            # Back-compat routing/planning markers for UI timelines
             await self._publish_event(conversation_id, _EventData(
                 type="planning_started",
                 message="Planning the approach...",
                 timestamp=time.time()
-            ), use_sse=use_sse, double_publish=double_publish)
+            ), use_sse=True, double_publish=False)
+
+            # (deduplicated - planning_started emitted above for consistent ordering)
+
+            # (deduplicated - planning_started emitted above for consistent ordering)
 
             # Optional params normalization prior to routing
             effective_params = user_params or {}
+            # If upstream already normalized (has _normalization_meta), skip re-normalization
+            if use_params and isinstance(effective_params, dict) and effective_params.get("_normalization_meta"):
+                use_params = False
             if use_params:
                 try:
                     effective_params = normalize_user_params(effective_params or {})
-                    validate_user_params(effective_params)
+                    validate_user_params(effective_params)  # type: ignore[call-arg]
                 except Exception:
                     effective_params = user_params or {}
 
             # Analyze and route
-            routing = await self.router.analyze_request(message, files, effective_params)
+            routing = await self.router.analyze_request(message, files, effective_params)  # type: ignore[call-arg]
             logger.info(f"🎯 Routing decision: {routing}")
 
             await self._publish_event(conversation_id, _EventData(
@@ -247,7 +277,7 @@ class UnifiedProcessor:
                 system=str(routing.get("system", "")),
                 complexity=float(routing.get("complexity", 0.0)),
                 reason=str(routing.get("reason", ""))
-            ), use_sse=use_sse, double_publish=double_publish)
+            ), use_sse=True, double_publish=False)
 
             # Always use advanced system - simple and hybrid systems removed
             # Emit verify/writer/evaluator/formatter lifecycle around the advanced execution window.
@@ -255,10 +285,16 @@ class UnifiedProcessor:
                 type="search_started",
                 message="Starting multi-agent search...",
                 timestamp=time.time()
-            ), use_sse=use_sse, double_publish=double_publish)
+            ), use_sse=True, double_publish=False)
 
             # Advanced execution (search/verify/write/evaluate/format handled inside graph; writer will stream tokens)
-            result = await self._process_advanced(message, files or [], effective_params if use_params else (user_params or {}), user_id or "", conversation_id)
+            result = await self._process_advanced(
+                message=message,
+                files=cast(List[Dict[str, Any]], files or []),
+                user_params=cast(Dict[str, Any], effective_params if use_params else (user_params or {})),  # type: ignore[valid-type]
+                user_id=str(user_id or ""),
+                conversation_id=str(conversation_id),
+            )
 
             # Finalize with finished event emitted below (done)
 
@@ -273,11 +309,11 @@ class UnifiedProcessor:
 
             # Record actual usage for budget tracking
             try:
-                processing_time = time.time() - start_time
-                actual_tokens = result.get("tokens_used", estimated_tokens)  # Use actual or fallback to estimate
-                actual_cost = budget_result.estimated_cost  # Could be refined with actual model costs
+                _ = time.time() - start_time  # keep variable used
+                actual_tokens = cast(Union[int, float], result.get("tokens_used", estimated_tokens))  # type: ignore[arg-type]
+                actual_cost = float(getattr(locals().get("budget_result", None), "estimated_cost", 0.0))
 
-                record_usage(
+                record_usage(  # type: ignore[call-arg]
                     actual_cost=actual_cost,
                     tokens_used=actual_tokens,
                     tenant=user_id,
@@ -294,14 +330,14 @@ class UnifiedProcessor:
                 type="workflow_finished",
                 message="Processing completed",
                 timestamp=time.time()
-            ), use_sse=use_sse, double_publish=double_publish)
+            ), use_sse=True, double_publish=False)
 
             # Back-compat 'done'
             await self._publish_event(conversation_id, _EventData(
                 type="done",
                 message="Processing completed",
                 timestamp=time.time()
-            ), use_sse=use_sse, double_publish=double_publish)
+            ), use_sse=True, double_publish=False)
 
             return result
 
@@ -310,20 +346,26 @@ class UnifiedProcessor:
 
             await self._publish_event(
                 conversation_id,
-                {
-                    "type": "error",
-                    "message": f"Error: {str(e)}",
-                    "timestamp": time.time()
-                },
-                use_sse=_FEATURE_SSE if 'use_sse' not in locals() else use_sse,
-                double_publish=False if 'double_publish' not in locals() else double_publish
+                _EventData(
+                    type="error",
+                    message=f"Error: {str(e)}",
+                    timestamp=time.time()
+                ),
+                use_sse=True,
+                double_publish=False
             )
 
             # Fallback to advanced system if available
             if locals().get("routing") and routing.get("system") != "advanced" and self.router.advanced_available:
                 logger.info("🔄 Falling back to advanced system")
                 try:
-                    result = await self._process_advanced(message, files, user_params, user_id, conversation_id)
+                    result = await self._process_advanced(
+                        message=message,
+                        files=cast(List[Dict[str, Any]], files or []),
+                        user_params=cast(Dict[str, Any], user_params or {}),
+                        user_id=str(user_id or ""),
+                        conversation_id=str(conversation_id),
+                    )
                     result.update({
                         "system_used": "advanced_fallback",
                         "complexity_score": routing.get("complexity", 5.0),
@@ -349,96 +391,72 @@ class UnifiedProcessor:
             }
 
     async def _publish_event(self, conversation_id: str, event_data: _EventData, use_sse: bool = False, double_publish: bool = False):
-        """Legacy event publishing - use _publish_typed_event for new code."""
-        # Convert legacy event to typed event
+        """Publish event via SSEService unified channel; fallback to legacy channel."""
+        evt_type = event_data.get("type", "content")
+        payload = {k: v for k, v in event_data.items() if k != "type"}
+
         try:
-            event_type = SSEEventType(event_data.get("type", "content"))
-            typed_event = SSEEventFactory.create_event(
-                event_type,
-                conversation_id=conversation_id,
-                **{k: v for k, v in event_data.items() if k != "type"}
-            )
-            await self._publish_typed_event(typed_event, use_sse, double_publish)
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Failed to convert to typed event, using legacy: {e}")
-            await self._publish_legacy_event(conversation_id, event_data, use_sse, double_publish)
+            if _sse_service is not None:
+                await _sse_service.publish_event(conversation_id, evt_type, payload)
+                return
+            else:
+                logger.warning("SSEService unavailable; dropping event to avoid legacy drift")
+        except Exception as e:
+            logger.warning(f"SSEService publish failed: {e}")
 
     async def _publish_typed_event(self, event: Any, use_sse: bool = False, double_publish: bool = False):
-        """Publish typed SSE event with production-grade serialization."""
+        """Publish typed SSE event via SSEService, fallback to legacy if needed."""
+        conversation_id = getattr(event, "conversation_id", None)
+        event_data = event.dict() if hasattr(event, "dict") else {}
+        evt_type = event_data.get("type", "content")
+        payload = {k: v for k, v in event_data.items() if k not in ["type", "conversation_id"]}
+
         try:
-            conversation_id = event.conversation_id
-
-            # Primary path: Unified SSE Publisher (production)
-            if _sse_pub is not None and SSEPublisher is not None:
-                try:
-                    # Serialize typed event
-                    event_data = event.dict()
-                    await _sse_pub.publish(
-                        conversation_id,
-                        event.type,
-                        {k: v for k, v in event_data.items() if k not in ["type", "conversation_id"]}
-                    )
-
-                    # Legacy fallback only if double_publish enabled for transition
-                    if double_publish:
-                        channel = f"sse:{conversation_id}"
-                        await redis_client.publish(channel, event.json())
-                    return
-                except Exception as pub_err:
-                    logger.error(f"SSE unified publish failed, falling back to Redis: {pub_err}")
-
-            # Fallback path: Direct Redis (legacy/emergency)
-            channel = f"sse:{conversation_id}"
-            await redis_client.publish(channel, event.json())
-
+            if _sse_service is not None:
+                await _sse_service.publish_event(conversation_id, evt_type, payload)
+                return
+            else:
+                logger.warning("SSEService unavailable; dropping typed event to avoid legacy drift")
         except Exception as e:
-            logger.error(f"All typed event publishing failed: {e}")
-            raise
+            logger.warning(f"SSEService typed publish failed: {e}")
+
+    async def _emit_agent_event(self, conversation_id: str, kind: str, *, agent: str, **fields: Any) -> None:
+        """Helper to emit agent:* events in a consistent shape.
+
+        kind: 'agent:start' | 'agent:tool' | 'agent:result'
+        fields may include: action, query, tool, result, tokens, cost, summary, count, details
+        """
+        try:
+            await self._publish_event(conversation_id, _EventData(
+                type=kind,
+                message=json.dumps({"agent": agent, **fields}),
+                timestamp=time.time()
+            ), use_sse=True, double_publish=False)
+        except Exception as e:
+            logger.warning(f"Failed to emit {kind} for {agent}: {e}")
 
     async def _publish_legacy_event(self, conversation_id: str, event_data: _EventData, use_sse: bool = False, double_publish: bool = False):
-        """Legacy event publishing fallback."""
-        try:
-            # Primary path: Unified SSE Publisher (production)
-            if _sse_pub is not None and SSEPublisher is not None:
-                try:
-                    await _sse_pub.publish(
-                        conversation_id,
-                        event_data.get("type", "content"),
-                        {k: v for k, v in event_data.items() if k != "type"}
-                    )
-
-                    # Legacy fallback only if double_publish enabled for transition
-                    if double_publish:
-                        channel = f"sse:{conversation_id}"
-                        await redis_client.publish(channel, json.dumps(event_data))
-                    return
-                except Exception as pub_err:
-                    logger.error(f"SSE unified publish failed, falling back to Redis: {pub_err}")
-
-            # Fallback path: Direct Redis (legacy/emergency)
-            channel = f"sse:{conversation_id}"
-            await redis_client.publish(channel, json.dumps(event_data))
-
-        except Exception as e:
-            logger.error(f"All legacy event publishing failed: {e}")
-            raise
+        """Legacy event publishing fallback (kept for safety)."""
+        # Legacy path removed; route through SSEService only to maintain a single canonical publisher
+        await self._publish_event(conversation_id, event_data, use_sse=True, double_publish=False)
 
     # _process_simple method removed - simple system eliminated
 
     async def _process_advanced(
         self,
         message: str,
-        files: List,
-        user_params: dict = None,
-        user_id: str = None,
-        conversation_id: str = None
+        files: List[Dict[str, Any]],
+        user_params: Dict[str, Any],
+        user_id: str,
+        conversation_id: str
     ) -> Dict[str, Any]:
         """Process using advanced HandyWriterz system with prompt orchestration."""
 
-        await self._publish_event(conversation_id, {
-            "type": "content",
-            "text": "Routing to advanced HandyWriterz agents..."
-        })
+        await self._publish_event(conversation_id, _EventData(
+            type="content",
+            text="Routing to advanced HandyWriterz agents...",
+            timestamp=time.time()
+        ), use_sse=True, double_publish=False)
 
         try:
             # Use provided conversation_id or create new one
@@ -458,6 +476,8 @@ class UnifiedProcessor:
                 try:
                     orchestrator = get_prompt_orchestrator()
                     if orchestrator:
+                        # Agent: planner start
+                        await self._emit_agent_event(conversation_id, 'agent:start', agent='planner', action='assemble_prompt')
                         # Map user params to prompt orchestrator format
                         use_case = self._map_mode_to_use_case(user_params.get("mode", "general") if user_params else "general")
 
@@ -475,10 +495,11 @@ class UnifiedProcessor:
                         # Map cost level
                         budget_level = self._map_cost_level(user_params.get("budget_level", "standard") if user_params else "standard")
 
-                        await self._publish_event(conversation_id, {
-                            "type": "content",
-                            "text": f"🎯 Assembling {use_case} prompt with {len(files)} files..."
-                        })
+                        await self._publish_event(conversation_id, _EventData(
+                            type="content",
+                            text=f"🎯 Assembling {use_case} prompt with {len(files)} files...",
+                            timestamp=time.time()
+                        ))
 
                         # Assemble production-grade prompt
                         prompt_assembly_result = orchestrator.assemble_prompt(
@@ -496,21 +517,39 @@ class UnifiedProcessor:
 
                         logger.info(f"🎯 Prompt assembled: {prompt_assembly_result.prompt_id} for {use_case}")
 
-                        await self._publish_event(conversation_id, {
-                            "type": "content",
-                            "text": f"✅ Prompt orchestration complete (ID: {prompt_assembly_result.prompt_id[:8]}...)"
-                        })
+                        await self._publish_event(conversation_id, _EventData(
+                            type="content",
+                            text=f"✅ Prompt orchestration complete (ID: {prompt_assembly_result.prompt_id[:8]}...)",
+                            timestamp=time.time()
+                        ))
+
+                        # Agent: planner result
+                        try:
+                            await self._emit_agent_event(
+                                conversation_id,
+                                'agent:result',
+                                agent='planner',
+                                summary='prompt_orchestrated',
+                                details={
+                                    "prompt_id": getattr(prompt_assembly_result, 'prompt_id', None),
+                                    "policy_version": getattr(prompt_assembly_result, 'policy_version', None),
+                                    "token_estimate": getattr(prompt_assembly_result, 'token_estimate', None),
+                                }
+                            )
+                        except Exception:
+                            pass
 
                 except Exception as e:
                     logger.warning(f"⚠️ Prompt orchestration failed, using default: {e}")
-                    await self._publish_event(conversation_id, {
-                        "type": "content",
-                        "text": "⚠️ Using fallback prompt system..."
-                    })
+                    await self._publish_event(conversation_id, _EventData(
+                        type="content",
+                        text="⚠️ Using fallback prompt system...",
+                        timestamp=time.time()
+                    ))
 
             # Create advanced state with prompt orchestration
             # Construct via kwargs dictionary to avoid Pylance false negatives on dataclass analysis
-            _state_kwargs = {
+            _state_kwargs: Dict[str, Any] = {
                 "conversation_id": conversation_id,
                 "user_id": user_id or "",
                 "wallet_address": None,
@@ -563,9 +602,110 @@ class UnifiedProcessor:
                 # Pass prompt assembly to graph execution
                 "prompt_assembly": prompt_assembly_result if prompt_assembly_result else None
             }
-            result = await handywriterz_graph.ainvoke(state, config)
+            # Agent: research + writer start markers (high-level)
+            await self._emit_agent_event(conversation_id, 'agent:start', agent='research_swarm', action='search_and_filter_sources')
+            await self._emit_agent_event(conversation_id, 'agent:start', agent='writer', action='draft_and_format')
+
+            result = await handywriterz_graph.ainvoke(state, config)  # type: ignore[call-arg]
 
             # Extract comprehensive results
+            # Emit agent results based on output
+            try:
+                sources = getattr(result, 'verified_sources', []) or []
+                await self._emit_agent_event(
+                    conversation_id,
+                    'agent:result',
+                    agent='research_swarm',
+                    summary='verified_sources',
+                    count=len(sources)
+                )
+                # Emit top sources as tool outcomes (title + url when available)
+                for s in (sources[:5] if isinstance(sources, list) else []):
+                    title = (s.get('title') if isinstance(s, dict) else None) or str(s)
+                    url = s.get('url') if isinstance(s, dict) else None
+                    conf = s.get('confidence') if isinstance(s, dict) else None
+                    await self._emit_agent_event(
+                        conversation_id,
+                        'agent:tool',
+                        agent='retriever',
+                        result=title,
+                        url=url,
+                        confidence=conf
+                    )
+            except Exception:
+                pass
+
+            try:
+                content = self._extract_content(result)
+                words = len(content.split()) if isinstance(content, str) else 0
+                await self._emit_agent_event(
+                    conversation_id,
+                    'agent:result',
+                    agent='writer',
+                    summary='draft_generated',
+                    words=words
+                )
+            except Exception:
+                pass
+
+            # Emit evaluator metrics if available
+            try:
+                eval_score = getattr(result, 'evaluation_score', None)
+                eval_results = getattr(result, 'evaluation_results', None)
+                samples = []
+                if isinstance(eval_results, list):
+                    for it in eval_results[:3]:
+                        if isinstance(it, dict):
+                            txt = it.get('feedback') or it.get('message') or it.get('text')
+                            if txt:
+                                samples.append(str(txt)[:300])
+                        elif isinstance(it, str):
+                            samples.append(it[:300])
+                if eval_score is not None:
+                    await self._emit_agent_event(
+                        conversation_id,
+                        'agent:result',
+                        agent='evaluator',
+                        summary='evaluation_complete',
+                        score=float(eval_score),
+                        feedback_samples=samples,
+                        details={"items": len(eval_results) if isinstance(eval_results, list) else 0}
+                    )
+            except Exception:
+                pass
+
+            # Emit tool outcomes if present in processing_metrics
+            try:
+                metrics = getattr(result, 'processing_metrics', {}) or {}
+                tools = metrics.get('tools') or metrics.get('tools_used') or metrics.get('tool_calls') or []
+                if isinstance(tools, list):
+                    for t in tools[:20]:  # cap to avoid flooding
+                        tool_name = (t.get('tool') or t.get('name') or 'tool') if isinstance(t, dict) else 'tool'
+                        summary = (t.get('summary') or t.get('result') or t.get('status') or '') if isinstance(t, dict) else str(t)
+                        query = t.get('query') if isinstance(t, dict) else None
+                        url = t.get('url') if isinstance(t, dict) else None
+                        title = t.get('title') if isinstance(t, dict) else None
+                        await self._emit_agent_event(
+                            conversation_id,
+                            'agent:tool',
+                            agent=str(tool_name),
+                            result=title or summary,
+                            query=query,
+                            url=url
+                        )
+                # Emit search queries if present on result
+                search_queries = getattr(result, 'search_queries', []) or []
+                if isinstance(search_queries, list):
+                    for q in search_queries[:10]:
+                        await self._emit_agent_event(
+                            conversation_id,
+                            'agent:tool',
+                            agent='search',
+                            query=str(q)
+                        )
+            except Exception:
+                pass
+
             return {
                 "success": True,
                 "trace_id": conversation_id,

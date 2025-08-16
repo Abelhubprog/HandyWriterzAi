@@ -56,10 +56,26 @@ if __name__ == "__main__":
     print("📍 Frontend should connect automatically via Next.js proxy")
     print("=" * 60)
 
+    # Restrict reload dirs to avoid scanning huge folders (node_modules, .next, etc.)
+    reload_dirs = [current_dir, src_path]
+    reload_excludes = [
+        "**/node_modules/**",
+        "**/.next/**",
+        "**/__pycache__/**",
+        "**/.pytest_cache/**",
+        "**/.git/**",
+        "**/.cache/**",
+    ]
+
     uvicorn.run(
         "start_server:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
+        host=os.getenv("API_HOST", "0.0.0.0"),
+        port=int(os.getenv("API_PORT", "8000")),
+        reload=os.getenv("API_RELOAD", "true").lower() == "true",
+        reload_dirs=reload_dirs,
+        reload_includes=["*.py"],
+        reload_excludes=reload_excludes,
+        # Debounce frequent reloads
+        reload_delay=0.25,
+        log_level=os.getenv("LOG_LEVEL", "info").lower()
     )

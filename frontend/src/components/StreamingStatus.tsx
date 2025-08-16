@@ -6,6 +6,7 @@ import { Brain, Zap, FileText, Globe, Shield, Loader2 } from 'lucide-react';
 interface StreamingStatusProps {
   events: any[];
   isConnected: boolean;
+  lastHeartbeatTs?: number | null;
   totalCost?: number;
   plagiarismScore?: number;
   qualityScore?: number;
@@ -13,12 +14,15 @@ interface StreamingStatusProps {
 
 export function StreamingStatus({ 
   events, 
-  isConnected, 
+  isConnected,
+  lastHeartbeatTs = null,
   totalCost = 0,
   plagiarismScore = 0,
   qualityScore = 0
 }: StreamingStatusProps) {
   const currentEvent = events[events.length - 1];
+  const now = Date.now();
+  const hbFresh = lastHeartbeatTs ? (now - lastHeartbeatTs) < 25000 : false;
   
   const getStatusIcon = (eventType: string) => {
     switch (eventType) {
@@ -79,6 +83,10 @@ export function StreamingStatus({
         </div>
         
         <div className="flex items-center gap-4 text-xs text-gray-500">
+          <span className="flex items-center gap-1">
+            <span className={`inline-block w-2 h-2 rounded-full ${hbFresh ? 'bg-emerald-500' : 'bg-yellow-500'} animate-pulse`} />
+            <span>{hbFresh ? 'Live' : 'Reconnecting...'}</span>
+          </span>
           {totalCost > 0 && (
             <span>Cost: ${totalCost.toFixed(4)}</span>
           )}

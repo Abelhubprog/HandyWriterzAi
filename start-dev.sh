@@ -1,89 +1,39 @@
 #!/bin/bash
-# HandyWriterz Development Environment Startup Script
-# Quick startup for local development and testing
+# Development startup script for HandyWriterzAI
 
-set -e
+echo "🚀 Starting HandyWriterzAI Development Environment"
+echo "================================================"
 
-echo "🔧 Starting HandyWriterz Development Environment..."
-echo "======================================================"
-
-# Check if .env file exists
-if [ ! -f ".env" ]; then
-    echo "⚠️  .env file not found. Creating from template..."
-    cp .env.production.example .env
-    echo "📝 Please edit .env file with your API keys before continuing."
-    echo "Required keys: OPENAI_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY"
+# Check if Docker is running
+if ! docker ps > /dev/null 2>&1; then
+    echo "❌ Docker is not running. Please start Docker first."
     exit 1
 fi
 
-# Check Docker
-if ! docker info > /dev/null 2>&1; then
-    echo "❌ Docker is not running. Please start Docker and try again."
-    exit 1
-fi
-
-echo "🐳 Docker is running"
-
-# Start services in development mode
-echo "🚀 Starting development services..."
-
-# Backend development
-cd backend
-echo "📦 Installing backend dependencies..."
-pip install -r requirements-cpu.txt > /dev/null 2>&1
-
-echo "🔧 Starting backend server..."
-python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload &
-BACKEND_PID=$!
-
-# Wait a moment for backend to start
-sleep 5
-
-# Test backend health
-if curl -f http://localhost:8000/health > /dev/null 2>&1; then
-    echo "✅ Backend is running on http://localhost:8000"
+# Start Redis for SSE streaming
+echo "🔧 Starting Redis for SSE streaming..."
+if ! docker ps | grep -q "redis"; then
+    docker run -d --name handywriterz-redis -p 6379:6379 redis:7-alpine redis-server --appendonly yes
+    echo "✅ Redis started on port 6379"
 else
-    echo "❌ Backend failed to start"
-    kill $BACKEND_PID 2>/dev/null || true
-    exit 1
+    echo "✅ Redis already running"
 fi
 
-cd ..
-
-# Frontend development
-echo "🎨 Starting frontend..."
-cd frontend
-
-if [ ! -d "node_modules" ]; then
-    echo "📦 Installing frontend dependencies..."
-    npm install > /dev/null 2>&1
+# Check if Redis is responding
+echo "🔍 Testing Redis connection..."
+if timeout 5 docker exec handywriterz-redis redis-cli ping > /dev/null 2>&1; then
+    echo "✅ Redis is responding"
+else
+    echo "❌ Redis is not responding - SSE streaming will not work"
 fi
 
-echo "🚀 Starting frontend server..."
-npm run dev &
-FRONTEND_PID=$!
-
-cd ..
-
-# Wait for frontend to start
-sleep 10
-
 echo ""
-echo "🎉 HandyWriterz Development Environment is ready!"
-echo "======================================================"
-echo "🎨 Frontend:     http://localhost:3000"
-echo "🔧 Backend API:  http://localhost:8000"
-echo "📊 API Docs:     http://localhost:8000/docs"
+echo "🎯 Next Steps:"
+echo "1. Backend: cd backend && python -m uvicorn src.main:app --reload"
+echo "2. Frontend: cd frontend && npm run dev"
+echo "3. Or use Docker: docker-compose up"
 echo ""
-echo "🧪 To run the dissertation test:"
-echo "   python test-dissertation-journey.py"
-echo ""
-echo "🛑 To stop services:"
-echo "   kill $BACKEND_PID $FRONTEND_PID"
-echo "   or press Ctrl+C"
-echo ""
-
-# Keep script running
-trap "echo 'Stopping services...'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null || true; exit 0" INT
-
-wait
+echo "📝 Important:"
+echo "- Redis is required for chat streaming to work"
+echo "- Make sure REDIS_URL=redis://localhost:6379 in backend/.env"
+echo "- Backend will fail gracefully if Redis is unavailable"

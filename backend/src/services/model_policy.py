@@ -15,9 +15,47 @@ import yaml
 import redis.asyncio as redis
 from pydantic import BaseModel, Field
 
-from ..config.settings import get_settings
+from ..config import get_settings
 from ..services.budget import CostLevel
-from .gateway import ModelSpec, ModelCapability, ProviderType
+# Prefer importing from the full gateway; fall back to light local definitions
+try:
+    from src.services.gateway import ModelSpec, ModelCapability, ProviderType  # type: ignore
+except Exception:  # pragma: no cover
+    from dataclasses import dataclass
+    from enum import Enum as _Enum
+    from typing import List as _List, Optional as _Optional
+
+    class ProviderType(str, _Enum):  # type: ignore
+        OPENROUTER = "openrouter"
+        DIRECT_OPENAI = "direct_openai"
+        DIRECT_ANTHROPIC = "direct_anthropic"
+        DIRECT_GEMINI = "direct_gemini"
+        DIRECT_PERPLEXITY = "direct_perplexity"
+
+    @dataclass
+    class ModelCapability:  # type: ignore
+        streaming: bool = False
+        function_calling: bool = False
+        vision: bool = False
+        reasoning: bool = False
+        web_search: bool = False
+        long_context: bool = False
+        creative_writing: bool = False
+        code_generation: bool = False
+        json_mode: bool = False
+
+    @dataclass
+    class ModelSpec:  # type: ignore
+        logical_id: str
+        provider: ProviderType
+        provider_model_id: str
+        capabilities: ModelCapability
+        cost_tier: "CostLevel"
+        context_window: int
+        input_cost_per_1k: float
+        output_cost_per_1k: float
+        fallback_models: _Optional[_List[str]] = None
+        admin_overridable: bool = True
 
 
 logger = logging.getLogger(__name__)
@@ -63,8 +101,9 @@ class ModelPolicyRegistry:
         self.node_requirements: Dict[str, NodeCapabilityRequirement] = {}
         self.provider_health: Dict[str, Dict[str, Any]] = {}
         
-        # Configuration paths
-        self.config_dir = Path(self.settings.base_dir) / "config"
+        # Configuration paths (derive safely from file location)
+        base_dir = Path(__file__).resolve().parent.parent  # .../src/services
+        self.config_dir = (base_dir.parent / "config")   # .../src/config
         self.policy_config_path = self.config_dir / "model_policies.yaml"
         self.node_requirements_path = self.config_dir / "node_requirements.yaml"
         

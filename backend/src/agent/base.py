@@ -11,13 +11,11 @@ import redis
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
 
-# Type variable for generic state
-StateType = TypeVar("StateType", bound=Dict[str, Any])
+# Type for state dictionary
+StateType = Dict[str, Any]
 
-# Redis client for SSE broadcasting
-import os
-redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-redis_client = redis.Redis.from_url(redis_url, decode_responses=True)
+# Unified SSE publisher (route all events through SSEService)
+from src.services.sse_service import get_sse_service  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +41,15 @@ class NodeTimeout(NodeError):
         )
 
 
-def with_timeout(timeout_seconds: float = 30.0):
-    """Decorator to add timeout functionality to async node functions."""
+def with_timeout(timeout_seconds: float = 30.0) -> Callable:
+    """Decorator to add timeout functionality to async node functions.
+
+    Args:
+        timeout_seconds: Maximum time in seconds to wait for function completion.
+
+    Returns:
+        Decorated function with timeout protection.
+    """
 
     def decorator(func: Callable) -> Callable:
         @wraps(func)
@@ -61,8 +66,16 @@ def with_timeout(timeout_seconds: float = 30.0):
     return decorator
 
 
-def with_retry(max_retries: int = 3, backoff_factor: float = 1.0):
-    """Decorator to add retry functionality to node functions."""
+def with_retry(max_retries: int = 3, backoff_factor: float = 1.0) -> Callable:
+    """Decorator to add retry functionality to node functions.
+
+    Args:
+        max_retries: Maximum number of retry attempts.
+        backoff_factor: Multiplier for exponential backoff between retries.
+
+    Returns:
+        Decorated function with retry protection.
+    """
 
     def decorator(func: Callable) -> Callable:
         @wraps(func)
@@ -95,20 +108,24 @@ def with_retry(max_retries: int = 3, backoff_factor: float = 1.0):
     return decorator
 
 
-def broadcast_sse_event(conversation_id: str, event_type: str, data: Dict[str, Any]):
-    """Broadcast an SSE event to the frontend via Redis pub/sub."""
+def broadcast_sse_event(conversation_id: str, event_type: str, data: Dict[str, Any]) -> None:
+    """Broadcast an SSE event via the unified SSEService publisher.
+
+    This routes all business-layer events through a single Redis channel
+    (sse:unified:{conversation_id}) with a minimal, flat envelope.
+    """
     try:
-        import json
-        event_data = {
-            "type": event_type,
-            "timestamp": time.time(),
-            "data": data
-        }
-        # Publish JSON to align with /api/stream consumer which expects json.loads(...)
-        redis_client.publish(f"sse:{conversation_id}", json.dumps(event_data))
+        # Fire-and-forget; do not block node execution on SSE failures
+        sse = get_sse_service()
+        # Ensure timestamp key aligns with canonical envelope (ts)
+        payload: Dict[str, Any] = dict(data)
+        if "ts" not in payload:
+            payload["ts"] = time.time()
+        # Dispatch asynchronously to avoid awaiting in sync context
+        asyncio.create_task(sse.publish_event(conversation_id, event_type, payload))
         logger.debug(f"Broadcasted SSE event {event_type} for conversation {conversation_id}")
     except Exception as e:
-        logger.error(f"Failed to broadcast SSE event: {e}")
+        logger.error(f"Failed to broadcast SSE event via SSEService: {e}")
 
 
 class NodeMetrics(BaseModel):
@@ -122,8 +139,13 @@ class NodeMetrics(BaseModel):
     error_message: Optional[str] = None
     retry_count: int = 0
 
-    def finish(self, success: bool = True, error_message: Optional[str] = None):
-        """Mark the node execution as finished."""
+    def finish(self, success: bool = True, error_message: Optional[str] = None) -> None:
+        """Mark the node execution as finished.
+
+        Args:
+            success: Whether the node execution was successful.
+            error_message: Error message if the execution failed.
+        """
         self.end_time = time.time()
         self.duration = self.end_time - self.start_time
         self.success = success
@@ -152,23 +174,35 @@ class BaseNode(ABC):
             {"node": self.name, "status": "starting"}
         )
 
-    def _broadcast_progress(self, state: StateType, message: str, progress: float = None, error: bool = False):
-        """Broadcast node progress event."""
+    def _broadcast_progress(self, state: StateType, message: str, progress: Optional[float] = None, error: bool = False):
+        """Broadcast node progress event.
+
+        Args:
+            state: Current workflow state.
+            message: Progress message to broadcast.
+            progress: Progress percentage (0-100).
+            error: Whether this is an error message.
+        """
         conversation_id = self._get_conversation_id(state)
-        data = {"node": self.name, "message": message}
+        data: Dict[str, Any] = {"node": self.name, "message": message}
         if progress is not None:
             data["progress"] = progress
         if error:
             data["error"] = True
             data["status"] = "error"
-        
+
         event_type = "node_error" if error else "node_progress"
         broadcast_sse_event(conversation_id, event_type, data)
 
-    def _broadcast_complete(self, state: StateType, result: Dict[str, Any] = None):
-        """Broadcast node completion event."""
+    def _broadcast_complete(self, state: StateType, result: Optional[Dict[str, Any]] = None):
+        """Broadcast node completion event.
+
+        Args:
+            state: Current workflow state.
+            result: Result data from node execution.
+        """
         conversation_id = self._get_conversation_id(state)
-        data = {"node": self.name, "status": "completed"}
+        data: Dict[str, Any] = {"node": self.name, "status": "completed"}
         if result:
             data["result"] = result
         broadcast_sse_event(conversation_id, "node_complete", data)
@@ -284,7 +318,7 @@ class DocumentChunk(BaseModel):
     @property
     def token_count(self) -> int:
         """Estimate token count (rough approximation)."""
-        return len(self.content.split()) * 1.3
+        return int(len(self.content.split()) * 1.3)
 
 
 class Source(BaseModel):

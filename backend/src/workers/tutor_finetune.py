@@ -39,24 +39,28 @@ def run_finetuning_job():
     railway_service = get_railway_client()
     s3 = get_s3_client()
 
-    try:
+    async def fetch_feedback():
         # 1. Fetch recent tutor feedback from Railway PostgreSQL
         yesterday = datetime.utcnow() - timedelta(days=1)
-        
+
         # Use direct PostgreSQL query instead of Supabase
         async with railway_service.get_connection() as conn:
             query = """
-            SELECT * FROM tutor_feedback 
+            SELECT * FROM tutor_feedback
             WHERE created_at >= $1
             ORDER BY created_at DESC;
             """
             results = await conn.fetch(query, yesterday)
-            
+
         if not results:
             print("No new tutor feedback in the last 24 hours. Exiting.")
             return
 
         print(f"Found {len(results)} new feedback entries.")
+
+    import asyncio
+    try:
+        asyncio.run(fetch_feedback())
 
         # 2. Create JSONL content
         jsonl_content = ""

@@ -12,7 +12,7 @@ from pgvector.sqlalchemy import Vector
 import uuid
 from datetime import datetime
 
-from db.database import DatabaseManager, db_manager
+from src.db.database import DatabaseManager, db_manager
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +86,7 @@ class Chunk(VectorBase):
     file_name = Column(String(255), nullable=False)
     chunk = Column(Text, nullable=False)
     embedding = Column(Vector(1536), nullable=True)
+    user_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
@@ -95,6 +96,11 @@ class RevolutionaryVectorStorage:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
         self.embedding_dimension = 1536  # OpenAI embedding dimension
+        # Require PostgreSQL with pgvector; do not silently degrade
+        db_url = getattr(self.db_manager, "database_url", "") or ""
+        if "postgresql" not in db_url:
+            raise RuntimeError("VectorStorage requires PostgreSQL with pgvector. Set DATABASE_URL to a Postgres instance (e.g., Railway) and enable the 'vector' extension.")
+        self.enabled = True
         self._initialize_pgvector()
         self._setup_vector_tables()
 
@@ -253,7 +259,7 @@ class RevolutionaryVectorStorage:
         embeddings: List[List[float]]
     ) -> List[str]:
         """Stores private document chunks with their embeddings."""
-        from db.models import PrivateChunk
+        from src.db.models import PrivateChunk
         try:
             stored_ids = []
             with self.db_manager.get_db_context() as db:
@@ -320,7 +326,7 @@ class RevolutionaryVectorStorage:
         user_id: Optional[str] = None # For accessing private documents
     ) -> List[Dict[str, Any]]:
         """Perform semantic search on documents using vector similarity."""
-        from db.models import PrivateChunk
+        from src.db.models import PrivateChunk
         try:
             with self.db_manager.get_db_context() as db:
 
@@ -437,6 +443,15 @@ class RevolutionaryVectorStorage:
             logger.error(f"Evidence similarity search failed: {e}")
             raise
 
+# Singleton accessor for vector storage
+_vector_storage_instance: Optional[RevolutionaryVectorStorage] = None
+
+def get_vector_storage() -> RevolutionaryVectorStorage:
+    global _vector_storage_instance
+    if _vector_storage_instance is None:
+        _vector_storage_instance = RevolutionaryVectorStorage(db_manager)
+    return _vector_storage_instance
+
     async def get_conversation_evidence(self, conversation_id: str) -> List[Dict[str, Any]]:
         """Get all evidence for a specific conversation."""
         try:
@@ -507,7 +522,7 @@ class RevolutionaryVectorStorage:
 
 
 # Global vector storage instance
-vector_storage = RevolutionaryVectorStorage(db_manager)
+# Avoid side effects at import time; use get_vector_storage() instead
 
 
 # Dependency injection for FastAPI

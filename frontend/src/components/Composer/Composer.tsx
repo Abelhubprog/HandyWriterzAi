@@ -18,6 +18,8 @@ interface FileAttachment {
   mime: string;
   uploading?: boolean;
   uploaded?: boolean;
+  file_id?: string; // Backend file ID for actual processing
+  error?: string;
 }
 
 interface ComposerProps {
@@ -32,6 +34,7 @@ interface ComposerProps {
       mime: string;
       name: string;
       size: number;
+      file_id?: string;
     }>;
   }) => void;
   disabled?: boolean;
@@ -85,6 +88,7 @@ export function Composer({ conversationId, onSend, disabled = false, className }
         mime: a.mime,
         name: a.name,
         size: a.size,
+        file_id: a.file_id, // Include backend file ID for processing
       })),
     };
 
@@ -121,56 +125,60 @@ export function Composer({ conversationId, onSend, disabled = false, className }
 
     setAttachments(prev => [...prev, ...newAttachments]);
 
-    // Upload files to backend
+    // Upload files to backend - NO FAKE FALLBACKS
     const formData = new FormData();
     Array.from(files).forEach((file) => {
       formData.append('files', file);
     });
 
     try {
-      const uploadResponse = await fetch('/api/files/upload', {
+      const uploadResponse = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });
 
-      if (uploadResponse.ok) {
-        const uploadResult = await uploadResponse.json();
-        const fileIds = uploadResult.file_ids || [];
-
-        // Update attachments with backend file IDs
-        setAttachments(prev =>
-          prev.map((attachment, index) => {
-            const newAttachment = newAttachments.find(na => na.id === attachment.id);
-            if (newAttachment) {
-              return {
-                ...attachment,
-                uploading: false,
-                uploaded: true,
-                url: fileIds[newAttachments.indexOf(newAttachment)] || attachment.url
-              };
-            }
-            return attachment;
-          })
-        );
-      } else {
-        throw new Error('Upload failed');
+      const uploadResult = await uploadResponse.json();
+      
+      if (!uploadResponse.ok || !uploadResult.success) {
+        throw new Error(uploadResult.error || 'Upload failed');
       }
+
+      const fileIds = uploadResult.file_ids || [];
+      console.log('Files uploaded successfully:', fileIds);
+
+      // Update attachments with actual backend file IDs
+      setAttachments(prev =>
+        prev.map((attachment) => {
+          const newAttachmentIndex = newAttachments.findIndex(na => na.id === attachment.id);
+          if (newAttachmentIndex >= 0 && fileIds[newAttachmentIndex]) {
+            return {
+              ...attachment,
+              uploading: false,
+              uploaded: true,
+              file_id: fileIds[newAttachmentIndex], // Store the actual backend file ID
+            };
+          }
+          return attachment;
+        })
+      );
+
+      toast({
+        title: "Files uploaded successfully",
+        description: `${fileIds.length} files ready for processing.`,
+      });
+
     } catch (error) {
       console.error('File upload failed:', error);
       
-      // Mark as uploaded with local reference (ChatGPT-style)
+      // Remove failed uploads - no fake success
       setAttachments(prev =>
-        prev.map(a =>
-          newAttachments.find(na => na.id === a.id)
-            ? { ...a, uploading: false, uploaded: true }
-            : a
-        )
+        prev.filter(a => !newAttachments.find(na => na.id === a.id))
       );
       
       toast({
-        title: "Files attached",
-        description: "Files will be included in your message (backend upload failed - using local references).",
-        variant: "default",
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Failed to upload files. Please try again.",
+        variant: "destructive",
       });
     }
   }, [toast]);

@@ -1,0 +1,130 @@
+Railway deployment plan without Supabase and with optional Cloudflare
+
+Summary
+- You can deploy both backend (FastAPI) and frontend (Next.js or SvelteKit build) on Railway using two services and a shared PostgreSQL + Redis add-on. Cloudflare is optional; Railway provides a public hostname and TLS by default. Use Cloudflare only if you need custom domains with WAF, caching, or geo-routing. Supabase is not required; use Railway PostgreSQL + pgvector (or skip vector features if undesired).
+
+Architecture on Railway
+- Services:
+  - Service A: backend FastAPI (container or Python buildpack)
+  - Service B: frontend (Next.js app or static build served via Railway’s Nixpacks or Node)
+  - Add-ons: PostgreSQL, Redis
+- Networking:
+  - Frontend calls backend via HTTPS using backend’s public Railway domain, defined as NEXT_PUBLIC_API_BASE_URL.
+  - SSE is supported over HTTPS; no special proxy is needed.
+
+Backend: required env vars
+- Core:
+  - PORT=8000 (Railway injects, but ensure your server binds to 0.0.0.0 and reads PORT)
+  - PYTHONUNBUFFERED=1
+  - ENV=production
+- URLs and DB:
+  - DATABASE_URL=postgresql://user:pass@host:port/db
+  - REDIS_URL=redis://default:pass@host:port
+- Feature flags (tune per canary/prod):
+  - FEATURE_SSE_PUBLISHER_UNIFIED=true
+  - FEATURE_DOUBLE_PUBLISH_SSE=false
+  - FEATURE_PARAMS_NORMALIZATION=true
+  - FEATURE_REGISTRY_ENFORCED=true
+  - FEATURE_SEARCH_ADAPTER=true
+- CORS:
+  - Ensure HandyWriterz frontend domain(s) are covered. Your backend already allows:
+    - http://localhost:3000, http://localhost:3001, http://localhost:5173
+    - https://handywriterz.vercel.app, https://*.handywriterz.com
+    - Add your Railway frontend domain to allow_origins if not already matched by wildcard.
+
+Backend: run command
+- Uvicorn binds to the provided PORT; Railway sets $PORT.
+  - CMD: uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+- Ensure dependencies include redis, fastapi, uvicorn, sqlalchemy, pydantic, langchain_core, etc.
+
+Frontend: required env vars
+- NEXT_PUBLIC_API_BASE_URL=https://<railway-backend-domain>
+- NEXT_PUBLIC_SSE_STREAM_PATH=/api/stream
+- NEXT_PUBLIC_UPLOAD_PATH=/api/upload
+- NEXT_PUBLIC_STATUS_PATH=/api/status
+
+Frontend: deployment
+- Next.js:
+  - Build: npm ci && npm run build
+  - Start: npm run start (Railway Node Nixpacks handles port)
+- If using SSG/Static:
+  - Build static output and serve via Next standalone or a simple static server Nixpacks.
+- If you prefer serving frontend from backend:
+  - Build frontend and copy assets into backend/build, the backend already mounts /app and /static when present.
+
+Database and vector storage (without Supabase)
+- Use Railway PostgreSQL as the primary operational DB. Your backend already calls Base.metadata.create_all and db_manager.health_check; ensure migrations or table creation run on startup.
+- If you used pgvector previously, you can:
+  - Enable pgvector on Railway PostgreSQL (if plan supports extensions), then use embeddings as before.
+  - Or skip semantic features by guarding vector endpoints and features (e.g., set feature flags or handle absence gracefully).
+
+Redis on Railway
+- Create a Redis add-on. Set REDIS_URL in backend service.
+- SSE endpoint relies on Redis pub/sub; verify health on /api/status (it already pings Redis).
+
+Cloudflare: when it’s needed
+- Not required for basic Railway deployment; Railway gives TLS and a public URL.
+- Add Cloudflare only if you need:
+  - Custom domain + WAF + rate limiting beyond backend middleware
+  - Caching static assets at edge
+  - Bot protection or geo-routing
+- If you use Cloudflare in front, configure:
+  - Proxy orange-cloud DNS for the frontend
+  - CORS to include your Cloudflare domain on backend
+  - SSE passthrough (ensure “no-transform” on content; EventSource generally works through Cloudflare)
+
+Production readiness checklist on Railway
+- Backend
+  - /health and /api/status return operational with Redis and DB healthy
+  - Streaming: /api/stream/{conversation_id} sends start/progress/done frames
+  - Model registry loads and validates (FEATURE_REGISTRY_ENFORCED=true)
+  - Database tables exist (auto-create logic runs, or migrations applied)
+  - CORS allows your frontend domain; OPTIONS preflight succeeds
+- Frontend
+  - NEXT_PUBLIC_API_BASE_URL set to backend
+  - Chat POST /api/chat returns a trace_id; EventSource attaches to /api/stream/{trace_id}
+  - File upload uses /api/upload (or files router) successfully
+  - Originality flow (optional) calls /api/turnitin/start and renders data—or remains feature-gated if not ready
+- Observability
+  - Logs show correlation_id and node phase
+  - Error paths emit a single normalized SSE error and HTTP JSON bodies
+- Security
+  - Rate limits enabled via decorators
+  - JWT endpoints operational if you route wallets or set Dynamic later
+  - Avoid exposing admin routes without auth (admin_models router)
+
+Minimal Railway configs
+- Service: backend
+  - Build: pip install -r requirements.txt
+  - Start: uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+  - Vars: DATABASE_URL, REDIS_URL, FEATURE_* flags
+- Service: frontend
+  - Build: npm ci && npm run build
+  - Start: npm run start
+  - Vars: NEXT_PUBLIC_API_BASE_URL=https://<backend-domain>
+- Add-ons: PostgreSQL, Redis
+- Custom Domain (optional):
+  - Point domain to frontend service; add backend URL as API base
+  - If using Cloudflare, create DNS “A/AAAA” or CNAME to Railway-provided hostname; enable proxy; verify CORS
+
+Deviations after removing Supabase
+- Replace Supabase Storage with:
+  - Object storage (e.g., Cloudflare R2, S3) for large artifacts; or store links in DB and serve via backend
+- Replace Supabase Auth:
+  - Keep existing JWT flow in backend (/api/auth/login) based on wallet or your own auth
+- Replace Supabase DB:
+  - Railway PostgreSQL directly; ensure any SQL extensions required (pgvector) are configured or feature-gate related endpoints
+
+Action items to finalize
+- Set Railway variables:
+  - Backend: DATABASE_URL, REDIS_URL, FEATURE_* flags, any provider API keys
+  - Frontend: NEXT_PUBLIC_API_BASE_URL pointing to backend public domain
+- Validate:
+  - Hit /api/status on Railway; confirm healthy
+  - From frontend Railway domain, POST /api/chat, then attach EventSource to /api/stream/{trace_id}
+  - Upload a file through frontend to /api/upload; confirm CORS and persistence
+- Optional:
+  - Configure a custom domain via Railway (or Cloudflare) and add domain to backend CORS list if wildcard isn’t enough
+
+Result
+The stack is fully deployable on Railway without Supabase. PostgreSQL and Redis add-ons cover persistence and streaming. Cloudflare is optional for custom domains/WAF/caching; not required for functionality. Configure NEXT_PUBLIC_API_BASE_URL to the backend Railway URL, set backend DATABASE_URL/REDIS_URL/FEATURE_* flags, and validate health, SSE, uploads, and chat flows in staging before promoting to production.

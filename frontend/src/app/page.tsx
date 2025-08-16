@@ -4,6 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { UserMenu } from '@/components/UserMenu';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -21,13 +22,7 @@ export default function LandingPage() {
             <span className="text-2xl font-bold">HandyWriterz</span>
           </div>
           <div className="flex items-center gap-6">
-            <Button
-              variant="ghost"
-              onClick={() => router.push('/auth')}
-              className="text-white/80 hover:text-white hover:bg-white/10"
-            >
-              Sign In
-            </Button>
+            <UserMenu compact />
             <Button
               onClick={() => router.push('/chat')}
               className="bg-white text-gray-900 hover:bg-gray-100 font-medium"

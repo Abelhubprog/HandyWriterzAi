@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Brain, Copy, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ChevronDown, ChevronRight, Brain, Copy, ThumbsUp, ThumbsDown, Check, Pencil, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DownloadMenu } from '@/components/DownloadMenu';
 import { ResponseActions } from '@/components/ResponseActions';
@@ -30,14 +30,16 @@ export function MessageBubble({
 }: MessageBubbleProps) {
   const [showReasoning, setShowReasoning] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState<string>(
+    typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
+  );
 
-  const handleCopy = async () => {
+  const handleCopy = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(
-        typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
-      );
+      await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), 1500);
     } catch (error) {
       console.error('Failed to copy:', error);
     }
@@ -49,15 +51,82 @@ export function MessageBubble({
   };
 
   if (message.type === 'human') {
+    const text = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
     return (
       <div className="mb-6 w-full">
         <div className="flex justify-end">
-          <div className="max-w-[70%] min-w-0">
-            <div className="bg-primary text-primary-foreground px-4 py-3 rounded-2xl rounded-br-md">
-              <div className="text-sm whitespace-pre-wrap break-words overflow-wrap-anywhere">
-                {typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}
+          {/* Relative wrapper to anchor the external bottom-right action bar */}
+          <div className="max-w-[70%] min-w-0 relative group">
+            {/* Actions: Copy + Edit - bottom-right, outside bubble, inline glyphs, hover/focus fade-in */}
+            <div className="pointer-events-none absolute bottom-[-6px] right-[-6px] opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100 z-10">
+              <div className="pointer-events-auto flex items-center gap-2 bg-transparent">
+                <button
+                  aria-label="Copy message"
+                  onClick={() => handleCopy(isEditing ? draft : text)}
+                  className="h-5 w-5 text-white/90 hover:text-white transition-colors"
+                  title={copied ? 'Copied!' : 'Copy'}
+                >
+                  {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+                </button>
+
+                {!isEditing ? (
+                  <button
+                    aria-label="Edit message"
+                    onClick={() => { setIsEditing(true); setDraft(text); }}
+                    className="h-5 w-5 text-white/90 hover:text-white transition-colors"
+                    title="Edit"
+                  >
+                    <Pencil className="h-5 w-5" />
+                  </button>
+                ) : (
+                  <button
+                    aria-label="Cancel edit"
+                    onClick={() => { setIsEditing(false); setDraft(text); }}
+                    className="h-5 w-5 text-white/90 hover:text-white transition-colors"
+                    title="Cancel"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                )}
               </div>
             </div>
+
+            <div className="bg-primary text-primary-foreground px-4 py-3 rounded-2xl rounded-br-md">
+              {isEditing ? (
+                <div className="space-y-2">
+                  <textarea
+                    className="w-full bg-white/10 text-primary-foreground text-sm rounded-md p-2 outline-none resize-y"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    rows={Math.min(12, Math.max(3, Math.ceil((draft || '').length / 80)))}
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => { setIsEditing(false); setDraft(text); }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        // Local-only edit: update current render without persisting to store
+                        (message as any).content = draft;
+                        setIsEditing(false);
+                      }}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm whitespace-pre-wrap break-words overflow-wrap-anywhere">
+                  {text}
+                </div>
+              )}
+            </div>
+
             <div className="text-xs text-muted-foreground mt-1 text-right">
               You • {message.timestamp ? new Date(message.timestamp).toLocaleTimeString() : 'now'}
             </div>
@@ -70,12 +139,88 @@ export function MessageBubble({
   return (
     <div className="mb-6 w-full">
       <div className="flex justify-start">
-        <div className="max-w-[85%] min-w-0">
-          <div className="bg-secondary text-foreground px-4 py-3 rounded-2xl rounded-bl-md">
-            <div className="text-sm whitespace-pre-wrap break-words overflow-wrap-anywhere leading-relaxed">
-              {typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}
+        {/* Relative wrapper to anchor the external bottom-right action bar */}
+        <div className="max-w-[85%] min-w-0 relative group">
+          {/* Actions: Copy + Edit - bottom-right, outside bubble, inline glyphs, hover/focus fade-in */}
+          <div className="pointer-events-none absolute bottom-[-6px] right-[-6px] opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100 z-10">
+            <div className="pointer-events-auto flex items-center gap-2 bg-transparent">
+              <button
+                aria-label="Copy message"
+                onClick={() =>
+                  handleCopy(typeof message.content === 'string' ? message.content : JSON.stringify(message.content))
+                }
+                className="h-5 w-5 text-foreground/70 hover:text-foreground transition-colors"
+                title={copied ? 'Copied!' : 'Copy'}
+              >
+                {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+              </button>
+
+              {/* Enable inline edit for assistant messages too */}
+              {!isEditing ? (
+                <button
+                  aria-label="Edit message"
+                  onClick={() => {
+                    setIsEditing(true);
+                    setDraft(typeof message.content === 'string' ? message.content : JSON.stringify(message.content));
+                  }}
+                  className="h-5 w-5 text-foreground/70 hover:text-foreground transition-colors"
+                  title="Edit"
+                >
+                  <Pencil className="h-5 w-5" />
+                </button>
+              ) : (
+                <button
+                  aria-label="Cancel edit"
+                  onClick={() => {
+                    setIsEditing(false);
+                    setDraft(typeof message.content === 'string' ? message.content : JSON.stringify(message.content));
+                  }}
+                  className="h-5 w-5 text-foreground/70 hover:text-foreground transition-colors"
+                  title="Cancel"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              )}
             </div>
-            
+          </div>
+          <div className="bg-secondary text-foreground px-4 py-3 rounded-2xl rounded-bl-md">
+            {isEditing ? (
+              <div className="space-y-2">
+                <textarea
+                  className="w-full bg-background/60 text-foreground text-sm rounded-md p-2 outline-none resize-y"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  rows={Math.min(12, Math.max(3, Math.ceil((draft || '').length / 80)))}
+                />
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setIsEditing(false);
+                      setDraft(typeof message.content === 'string' ? message.content : JSON.stringify(message.content));
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      // Local-only edit for assistant too
+                      (message as any).content = draft;
+                      setIsEditing(false);
+                    }}
+                  >
+                    Save
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm whitespace-pre-wrap break-words overflow-wrap-anywhere leading-relaxed">
+                {typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}
+              </div>
+            )}
+
             {/* Reasoning Toggle */}
             {reasoning && (
               <div className="mt-4 border-t border-border pt-3">
@@ -91,7 +236,7 @@ export function MessageBubble({
                   <Brain className="h-3 w-3" />
                   Show reasoning
                 </button>
-                
+
                 {showReasoning && (
                   <div className="mt-2 p-3 bg-muted/50 rounded-lg border border-border">
                     <div className="text-xs text-muted-foreground font-mono whitespace-pre-wrap break-words">
@@ -123,7 +268,7 @@ export function MessageBubble({
             <div className="text-xs text-muted-foreground">
               HandyWriterz • {message.timestamp ? new Date(message.timestamp).toLocaleTimeString() : 'now'}
             </div>
-            
+
             <ResponseActions
               messageId={message.id || 'unknown'}
               messageContent={typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}

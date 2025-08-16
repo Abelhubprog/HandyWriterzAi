@@ -653,6 +653,10 @@ pyyaml==6.0.2
     # via
     #   chromadb
     #   huggingface-hub
+ pgvector==0.4.1
+    # required by src.db.models for vector columns
+langchain-anthropic==0.3.2
+    # provides langchain_anthropic.ChatAnthropic for llm_service
     #   kubernetes
     #   langchain
     #   langchain-core

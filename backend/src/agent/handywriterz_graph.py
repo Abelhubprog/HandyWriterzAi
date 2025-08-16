@@ -46,7 +46,7 @@ from .nodes.search_claude import ClaudeSearchAgent
 # Note: Deepseek, Qwen, and Grok search agents are temporarily disabled
 # Uncomment these imports when the agents are ready:
 # from .nodes.search_deepseek import DeepseekSearchAgent
-# from .nodes.search_qwen import QwenSearchAgent  
+# from .nodes.search_qwen import QwenSearchAgent
 # from .nodes.search_grok import GrokSearchAgent
 from .nodes.search_openai import OpenAISearchAgent
 from .nodes.search_github import GitHubSearchAgent
@@ -74,7 +74,7 @@ load_dotenv()
 # Validate required environment variables (disabled for demo startup)
 required_env_vars = [
     "GEMINI_API_KEY",
-    "PERPLEXITY_API_KEY", 
+    "PERPLEXITY_API_KEY",
     "OPENAI_API_KEY",
     "DATABASE_URL",
     "REDIS_URL",
@@ -88,29 +88,29 @@ required_env_vars = [
 
 class HandyWriterzOrchestrator:
     """Main orchestrator for the HandyWriterz academic writing workflow."""
-    
+
     def __init__(self):
         # Revolutionary orchestration agents
         self.master_orchestrator = MasterOrchestratorAgent()
         self.enhanced_user_intent = EnhancedUserIntentAgent()
-        
+
         # Existing workflow agents
         self.user_intent_node = UserIntentNode()
         self.planner_node = PlannerNode()
         self.writer_node = WriterNode()
         self.memory_writer_node = MemoryWriterNode()
         self.memory_retriever_node = MemoryRetrieverNode()
-        
+
         # Revolutionary sophisticated agents
         self.evaluator_node = EvaluatorNode("evaluator")
         self.turnitin_loop_node = revolutionary_turnitin_node
         self.formatter_node = revolutionary_formatter_node
         self.fail_handler_node = revolutionary_fail_handler_node
-        
+
         # Revolutionary swarm intelligence agents
         self.swarm_coordinator_node = swarm_intelligence_coordinator_node
         self.emergent_intelligence_node = emergent_intelligence_engine_node
-        
+
         # EvidenceGuard agents
         self.search_crossref_node = SearchCrossRef()
         self.search_pmc_node = SearchPMC()
@@ -119,7 +119,7 @@ class HandyWriterzOrchestrator:
         self.citation_audit_node = CitationAudit()
         self.source_filter_node = SourceFilterNode()
         self.source_fallback_controller_node = SourceFallbackController()
-        
+
         # Production-ready AI search agents
         self.search_agents = {
             "gemini": GeminiSearchAgent(),
@@ -129,14 +129,14 @@ class HandyWriterzOrchestrator:
             "openai": OpenAISearchAgent(),
             "github": GitHubSearchAgent(),
         }
-        
+
         # Dynamically initialize search nodes based on config
         search_model_config = get_model_config("search")
         self.enabled_search_agents = {}
         for model_name in search_model_config.values():
             if isinstance(model_name, str) and model_name in self.search_agents:
                 self.enabled_search_agents[model_name] = self.search_agents[model_name]
-        
+
         # Intelligent intent analyzer
         self.intelligent_intent_analyzer = IntelligentIntentAnalyzer()
         self.aggregator_node = AggregatorNode()
@@ -155,22 +155,22 @@ class HandyWriterzOrchestrator:
         self.action_plan_template_tool = ActionPlanTemplateTool()
         self.case_study_framework_tool = CaseStudyFrameworkTool()
         self.cost_model_tool = CostModelTool()
-    
+
     def create_graph(self) -> StateGraph:
         """Create the LangGraph state graph for the workflow."""
-        
+
         # Create the graph with our state schema
         builder = StateGraph(HandyWriterzState)
-        
+
         # Add revolutionary orchestration nodes
         builder.add_node("memory_retriever", self._execute_memory_retriever)
         builder.add_node("master_orchestrator", self._execute_master_orchestrator)
         builder.add_node("enhanced_user_intent", self._execute_enhanced_user_intent)
-        
+
         # Add existing workflow nodes
         builder.add_node("user_intent", self._execute_user_intent)
         builder.add_node("planner", self._execute_planner)
-        
+
         # Add EvidenceGuard search nodes
         builder.add_node("search_crossref", self._execute_search_crossref)
         builder.add_node("search_pmc", self._execute_search_pmc)
@@ -178,7 +178,7 @@ class HandyWriterzOrchestrator:
         builder.add_node("source_verifier", self._execute_source_verifier)
         builder.add_node("citation_audit", self._execute_citation_audit)
         builder.add_node("source_fallback_controller", self._execute_source_fallback_controller)
-        
+
         # Add production-ready AI search nodes
         for agent_name, agent_instance in self.enabled_search_agents.items():
             builder.add_node(f"search_{agent_name}", self._create_search_execution_method(agent_instance, agent_name))
@@ -193,10 +193,10 @@ class HandyWriterzOrchestrator:
         builder.add_node("methodology_writer", self._execute_methodology_writer)
         builder.add_node("generate_prisma_diagram", self._execute_generate_prisma_diagram)
         builder.add_node("execute_parallel_searches", self._execute_parallel_searches)
-        
+
         # Add intelligent intent analyzer
         builder.add_node("intelligent_intent_analyzer", self._execute_intelligent_intent_analyzer)
-        
+
         # Add revolutionary sophisticated agents
         builder.add_node("source_filter", self._execute_source_filter)
         builder.add_node("writer", self._execute_writer)
@@ -205,22 +205,22 @@ class HandyWriterzOrchestrator:
         builder.add_node("formatter_advanced", self._execute_formatter)
         builder.add_node("memory_writer", self._execute_memory_writer)
         builder.add_node("fail_handler_advanced", self._execute_fail_handler)
-        
+
         # Add revolutionary swarm intelligence agents
         builder.add_node("swarm_coordinator", self._execute_swarm_coordinator)
         builder.add_node("emergent_intelligence", self._execute_emergent_intelligence)
-        
+
         # Define the workflow edges
         self._add_workflow_edges(builder)
-        
+
         return builder.compile(name="handywriterz-academic-writing-agent")
-    
+
     def _add_workflow_edges(self, builder: StateGraph):
         """Add edges to define the revolutionary workflow."""
-        
+
         # 🎭 START WITH MEMORY RETRIEVAL
         builder.add_edge(START, "memory_retriever")
-        
+
         # After retrieving memory, proceed to the planner
         builder.add_edge("memory_retriever", "planner")
 
@@ -344,10 +344,10 @@ class HandyWriterzOrchestrator:
 
         # Formatter to Memory Writer
         builder.add_edge("formatter_advanced", "memory_writer")
-        
+
         # Memory Writer to End
         builder.add_edge("memory_writer", END)
-        
+
         # Fail handler routes back to appropriate recovery or END
         builder.add_conditional_edges(
             "fail_handler_advanced",
@@ -363,7 +363,7 @@ class HandyWriterzOrchestrator:
         self._create_case_study_pipeline(builder)
         self._create_technical_report_pipeline(builder)
         self._create_comparative_essay_pipeline(builder)
-    
+
     def _route_to_pipeline(self, state: HandyWriterzState) -> str:
         """Routes to the correct pipeline based on the planner's output."""
         task_type = state.get("task_type", "default")
@@ -426,7 +426,7 @@ class HandyWriterzOrchestrator:
     async def _execute_placeholder(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """A placeholder node for unimplemented pipelines."""
         return {"status": "placeholder"}
-    
+
     # Revolutionary Node execution methods
     async def _execute_master_orchestrator(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """Execute revolutionary Master Orchestrator agent."""
@@ -435,7 +435,7 @@ class HandyWriterzOrchestrator:
             return {**result, "current_node": "master_orchestrator"}
         except Exception as e:
             return await self._handle_node_error(state, "master_orchestrator", e)
-    
+
     async def _execute_enhanced_user_intent(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """Execute revolutionary Enhanced User Intent agent."""
         try:
@@ -451,7 +451,7 @@ class HandyWriterzOrchestrator:
             return {**result, "current_node": "memory_retriever"}
         except Exception as e:
             return await self._handle_node_error(state, "memory_retriever", e)
-    
+
     # Legacy Node execution methods
     async def _execute_user_intent(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """Execute user intent processing."""
@@ -460,7 +460,7 @@ class HandyWriterzOrchestrator:
             return {**result, "current_node": "user_intent"}
         except Exception as e:
             return await self._handle_node_error(state, "user_intent", e)
-    
+
     async def _execute_planner(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """Execute planning."""
         try:
@@ -666,7 +666,7 @@ class HandyWriterzOrchestrator:
             return {**result, "current_node": "source_filter"}
         except Exception as e:
             return await self._handle_node_error(state, "source_filter", e)
-    
+
     async def _execute_writer(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """Execute writing."""
         try:
@@ -674,7 +674,7 @@ class HandyWriterzOrchestrator:
             return {**result, "current_node": "writer"}
         except Exception as e:
             return await self._handle_node_error(state, "writer", e)
-    
+
     async def _execute_memory_writer(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """Execute memory writer for user fingerprints."""
         try:
@@ -682,7 +682,7 @@ class HandyWriterzOrchestrator:
             return {**result, "current_node": "memory_writer", "workflow_status": "completed"}
         except Exception as e:
             return await self._handle_node_error(state, "memory_writer", e)
-    
+
     # Revolutionary sophisticated agent execution methods
     async def _execute_evaluator(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """Execute revolutionary multi-model evaluator."""
@@ -691,7 +691,7 @@ class HandyWriterzOrchestrator:
             return {**result, "current_node": "evaluator_advanced"}
         except Exception as e:
             return await self._handle_node_error(state, "evaluator_advanced", e)
-    
+
     async def _execute_turnitin_loop(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """Execute revolutionary Turnitin agent."""
         try:
@@ -699,7 +699,7 @@ class HandyWriterzOrchestrator:
             return {**result, "current_node": "turnitin_advanced"}
         except Exception as e:
             return await self._handle_node_error(state, "turnitin_advanced", e)
-    
+
     async def _execute_formatter(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """Execute revolutionary document formatter."""
         try:
@@ -707,7 +707,7 @@ class HandyWriterzOrchestrator:
             return {**result, "current_node": "formatter_advanced"}
         except Exception as e:
             return await self._handle_node_error(state, "formatter_advanced", e)
-    
+
     async def _execute_fail_handler(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """Execute revolutionary fail handler."""
         try:
@@ -721,7 +721,7 @@ class HandyWriterzOrchestrator:
                 "current_node": "critical_failure",
                 "escalation_required": True
             }
-    
+
     # Revolutionary Swarm Intelligence execution methods
     async def _execute_swarm_coordinator(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """Execute revolutionary swarm intelligence coordinator."""
@@ -730,7 +730,7 @@ class HandyWriterzOrchestrator:
             return {**result, "current_node": "swarm_coordinator"}
         except Exception as e:
             return await self._handle_node_error(state, "swarm_coordinator", e)
-    
+
     async def _execute_emergent_intelligence(self, state: HandyWriterzState, config: RunnableConfig) -> Dict[str, Any]:
         """Execute revolutionary emergent intelligence engine."""
         try:
@@ -738,7 +738,7 @@ class HandyWriterzOrchestrator:
             return {**result, "current_node": "emergent_intelligence"}
         except Exception as e:
             return await self._handle_node_error(state, "emergent_intelligence", e)
-    
+
     # Revolutionary Routing functions
     def _route_from_orchestrator(self, state: HandyWriterzState) -> str:
         """Revolutionary routing from Master Orchestrator based on workflow intelligence."""
@@ -747,23 +747,23 @@ class HandyWriterzOrchestrator:
 
         orchestration_result = state.get("orchestration_result", {})
         workflow_intelligence = orchestration_result.get("workflow_intelligence", {})
-        
+
         # Determine complexity and route accordingly
         complexity = workflow_intelligence.get("academic_complexity", 5.0)
         success_probability = orchestration_result.get("success_probability", 0.8)
-        
+
         # Use Enhanced User Intent for complex or high-value requests
         if complexity >= 7.0 or success_probability >= 0.9:
             return "enhanced_user_intent"
         else:
             return "user_intent"  # Fallback to legacy processing
-    
+
     def _route_after_intent_analysis(self, state: HandyWriterzState) -> str:
         """Route after intelligent intent analysis based on clarity and completeness."""
         intent_analysis_result = state.get("intent_analysis_result", {})
         should_proceed = intent_analysis_result.get("should_proceed", False)
         clarifying_questions = state.get("clarifying_questions", [])
-        
+
         # Check if user params indicate "general" mode (do nothing mode)
         user_params = state.get("user_params", {})
         field = user_params.get("field", "").lower()
@@ -779,7 +779,7 @@ class HandyWriterzOrchestrator:
                 }
             })
             return "clarification_needed"
-        
+
         if should_proceed:
             return "planner"
         else:
@@ -794,7 +794,7 @@ class HandyWriterzOrchestrator:
                 }
             })
             return "clarification_needed"
-    
+
     # Revolutionary parallel routing with AI agents
     def _route_to_ai_search_agents(self, state: HandyWriterzState) -> List[Send]:
         """Route to revolutionary AI search agents in parallel for maximum intelligence and source diversity."""
@@ -803,10 +803,10 @@ class HandyWriterzOrchestrator:
             Send("search_pmc", state),
             Send("search_ss", state),
         ]
-        
+
         for agent_name in self.enabled_search_agents:
             sends.append(Send(f"search_{agent_name}", state))
-            
+
         return sends
 
     def _route_after_source_verifier(self, state: HandyWriterzState) -> str:
@@ -814,17 +814,17 @@ class HandyWriterzOrchestrator:
         if state.get("need_fallback"):
             return "source_fallback_controller"
         return "source_filter"
-    
+
     def _route_after_source_filter(self, state: HandyWriterzState) -> str:
         """Route after source filtering: determine if swarm intelligence is needed."""
         sources = state.get("sources", [])
-        
+
         if len(sources) < state.get("params", {}).get("min_sources", 3):
             return "fail_handler_advanced"  # Not enough sources
-        
+
         # Determine if problem complexity warrants swarm intelligence
         complexity_score = self._calculate_swarm_complexity_score(state)
-        
+
         # Use swarm intelligence for complex problems
         if complexity_score >= 7.0:
             return "swarm_coordinator"
@@ -837,46 +837,46 @@ class HandyWriterzOrchestrator:
             # TODO: Add revision count to avoid infinite loops
             return "revision_needed"
         return "proceed"
-    
+
     def _calculate_swarm_complexity_score(self, state: HandyWriterzState) -> float:
         """Calculate problem complexity score to determine swarm intelligence need."""
         user_request = state.get("user_request", "")
         requirements = state.get("requirements", [])
         verified_sources = state.get("sources", [])
-        
+
         complexity = 5.0  # Base complexity
-        
+
         # Factor in request length and sophistication
         if len(user_request) > 500:
             complexity += 1.0
         if len(user_request) > 1000:
             complexity += 1.0
-        
+
         # Factor in number of requirements
         complexity += len(requirements) * 0.5
-        
+
         # Factor in source diversity and complexity
         complexity += min(2.0, len(verified_sources) * 0.2)
-        
+
         # Factor in complex keywords that suggest need for collective reasoning
         complex_keywords = [
             "analyze", "synthesize", "evaluate", "compare", "critique", "argue",
             "interdisciplinary", "multi-faceted", "complex", "comprehensive",
             "research paper", "dissertation", "thesis", "systematic review"
         ]
-        
+
         for keyword in complex_keywords:
             if keyword.lower() in user_request.lower():
                 complexity += 0.5
-        
+
         # Factor in orchestration intelligence if available
         orchestration_result = state.get("orchestration_result", {})
         workflow_intelligence = orchestration_result.get("workflow_intelligence", {})
         if workflow_intelligence.get("academic_complexity", 0) >= 7.0:
             complexity += 1.0
-        
+
         return min(complexity, 10.0)
-    
+
     def _route_after_evaluation(self, state: HandyWriterzState) -> str:
         """Route after evaluation."""
         is_complete = state.get("is_complete", False)
@@ -886,27 +886,27 @@ class HandyWriterzOrchestrator:
             # In a real scenario, you might want to loop back to the writer
             # or trigger a different recovery mechanism.
             return "fail_handler_advanced"
-    
+
     def _route_after_turnitin(self, state: HandyWriterzState) -> str:
         """Route after revolutionary Turnitin processing."""
         turnitin_passed = state.get("turnitin_passed", False)
         similarity_passed = state.get("similarity_passed", False)
         ai_detection_passed = state.get("ai_detection_passed", False)
         revision_count = state.get("revision_count", 0)
-        
+
         if turnitin_passed and similarity_passed and ai_detection_passed:
             return "formatter_advanced"  # Perfect - ready for sophisticated formatting
         elif revision_count < 4 and (similarity_passed or ai_detection_passed):
             return "writer"  # Partially passed, needs targeted revision
         else:
             return "fail_handler_advanced"  # Failed academic integrity standards
-    
+
     def _route_from_fail_handler(self, state: HandyWriterzState) -> str:
         """Route from revolutionary fail handler based on recovery strategy."""
         recovery_result = state.get("recovery_successful", False)
         recovery_strategy = state.get("recovery_strategy", "")
         failure_count = state.get("failure_count", 0)
-        
+
         if recovery_result and "retry" in recovery_strategy.lower():
             return "writer"  # Recovery successful, retry writing
         elif recovery_result and "search" in recovery_strategy.lower():
@@ -918,7 +918,7 @@ class HandyWriterzOrchestrator:
             return "swarm_coordinator"
         else:
             return END  # Unrecoverable failure, end workflow
-    
+
     # Helper methods
     async def _handle_node_error(self, state: HandyWriterzState, node_name: str, error: Exception) -> Dict[str, Any]:
         """Handle node execution errors."""
@@ -928,15 +928,15 @@ class HandyWriterzOrchestrator:
             "failed_node": node_name,
             "current_node": "fail_handler"
         }
-        
+
         # Increment retry count
         retry_count = state.get("retry_count", 0) + 1
         error_info["retry_count"] = retry_count
-        
+
         # Determine if error is recoverable
         if retry_count < 3 and hasattr(error, 'recoverable') and error.recoverable:
             error_info["workflow_status"] = "retry_pending"
-        
+
         return error_info
 
     def _create_search_execution_method(self, agent_instance, agent_name):
@@ -953,7 +953,11 @@ class HandyWriterzOrchestrator:
 
 # Create the main graph instance
 def create_handywriterz_graph() -> StateGraph:
-    """Create and return the HandyWriterz workflow graph."""
+    """Create and return the HandyWriterz workflow graph.
+
+    Returns:
+        StateGraph: The compiled LangGraph workflow for HandyWriterz.
+    """
     orchestrator = HandyWriterzOrchestrator()
     return orchestrator.create_graph()
 

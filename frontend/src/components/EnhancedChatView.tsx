@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { StreamingStatus } from '@/components/StreamingStatus';
 import { MessageBubble } from '@/components/MessageBubble';
@@ -9,6 +9,8 @@ import type { Message } from '@/types';
 import { TimelineEvent } from '@/hooks/useStream';
 import { ProcessedEvent } from '@/components/ActivityTimeline';
 import { useToast } from '@/components/ui/use-toast';
+import { ResearchTimelinePanel } from '@/components/ResearchTimelinePanel';
+import { SourcesSidecar } from '@/components/SourcesSidecar';
 
 interface EnhancedChatViewProps {
   messages: Message[];
@@ -44,6 +46,7 @@ export function EnhancedChatView({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const [showInsights, setShowInsights] = useState(false);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -113,8 +116,9 @@ export function EnhancedChatView({
           qualityScore={qualityScore}
         />
       )}
-      <ScrollArea className="flex-1" ref={scrollAreaRef}>
-        <div className="p-6 space-y-4 max-w-4xl mx-auto w-full">
+      <div className="flex-1 lg:grid lg:grid-cols-12 relative">
+        <ScrollArea className="lg:col-span-8 flex-1" ref={scrollAreaRef}>
+          <div className="p-6 space-y-4 max-w-3xl mx-auto w-full">
           {displayMessages.length === 0 ? (
             <div className="text-center text-gray-400 py-12">
               <p>No messages yet. Start the conversation!</p>
@@ -151,9 +155,34 @@ export function EnhancedChatView({
               );
             })
           )}
-          <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} />
+          </div>
+        </ScrollArea>
+        <div className="hidden lg:block lg:col-span-4 p-4 space-y-4">
+          <ResearchTimelinePanel events={liveActivityEvents} isConnected={isConnected} conversationId={traceId || undefined} />
+          <SourcesSidecar events={liveActivityEvents} conversationId={traceId || undefined} />
         </div>
-      </ScrollArea>
+        {/* Mobile toggle button */}
+        <button
+          onClick={() => setShowInsights(true)}
+          className="lg:hidden fixed bottom-4 right-4 z-20 bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-full shadow"
+        >
+          Timeline
+        </button>
+        {/* Mobile overlay panel */}
+        {showInsights && (
+          <div className="lg:hidden fixed inset-0 z-30 bg-black/70" onClick={() => setShowInsights(false)}>
+            <div className="absolute right-0 top-0 bottom-0 w-5/6 max-w-sm bg-gray-900 border-l border-gray-800 p-4 space-y-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-200">Insights</h3>
+                <button onClick={() => setShowInsights(false)} className="text-gray-400 hover:text-gray-200 text-sm">Close</button>
+              </div>
+              <ResearchTimelinePanel events={liveActivityEvents} isConnected={isConnected} conversationId={traceId || undefined} />
+              <SourcesSidecar events={liveActivityEvents} conversationId={traceId || undefined} />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

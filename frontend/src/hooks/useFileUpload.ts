@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import * as tus from 'tus-js-client';
 
 export interface UploadFile {
   id: string;
@@ -46,59 +45,87 @@ export const useFileUpload = () => {
         reader.readAsDataURL(file);
       }
 
-      // Initialize tus upload
-      const upload = new tus.Upload(file, {
-        endpoint: 'http://localhost:8000/api/files/upload',
-        retryDelays: [0, 1000, 3000, 5000],
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        },
-        metadata: {
-          filename: file.name,
-          filetype: file.type,
-          filesize: file.size.toString()
-        },
-        onError: (error) => {
-          console.error('Upload failed:', error);
-          setFiles(prev => prev.map(f => 
-            f.id === uploadId 
-              ? { ...f, status: 'error', error: error.message }
+      (async () => {
+        try {
+          // Mark uploading (no granular progress with fetch)
+          setFiles(prev => prev.map(f => f.id === uploadId ? { ...f, status: 'uploading', progress: 10 } : f));
+
+          // Try direct-to-R2 presigned PUT first
+          let firstId: string | null = null;
+          try {
+            const presignForm = new FormData();
+            presignForm.append('filename', file.name);
+            presignForm.append('filesize', String(file.size));
+            presignForm.append('mime_type', file.type || 'application/octet-stream');
+            const presignRes = await fetch('/api/files/presign', {
+              method: 'POST',
+              body: presignForm,
+              headers: {
+                ...(typeof window !== 'undefined' && localStorage.getItem('access_token')
+                  ? { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+                  : {})
+              }
+            })
+            if (presignRes.ok) {
+              const presign = await presignRes.json()
+              const uploadUrl: string = presign.upload_url
+              const headers: Record<string,string> = presign.headers || {}
+              const putRes = await fetch(uploadUrl, {
+                method: 'PUT',
+                body: file,
+                headers
+              })
+              if (!putRes.ok) throw new Error(`PUT failed: ${putRes.status}`)
+              firstId = String(presign.file_id)
+            }
+          } catch (e) {
+            // Fallback to backend multipart upload
+            const form = new FormData();
+            form.append('files', file);
+            const res = await fetch('/api/upload', {
+              method: 'POST',
+              body: form,
+              headers: {
+                ...(typeof window !== 'undefined' && localStorage.getItem('access_token')
+                  ? { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+                  : {})
+              }
+            });
+            if (!res.ok) {
+              const text = await res.text();
+              throw new Error(text || `Upload failed: ${res.status}`);
+            }
+            const data = await res.json();
+            const fileIds: string[] = data.file_ids || [];
+            firstId = fileIds[0] || null;
+          }
+          if (!firstId) throw new Error('No file_id returned');
+
+          setFiles(prev => prev.map(f =>
+            f.id === uploadId
+              ? { ...f, status: 'completed', file_id: firstId, progress: 100 }
               : f
           ));
-          reject(error);
-        },
-        onProgress: (bytesUploaded, bytesTotal) => {
-          const progress = Math.round((bytesUploaded / bytesTotal) * 100);
-          setFiles(prev => prev.map(f => 
-            f.id === uploadId 
-              ? { ...f, progress, status: 'uploading' }
-              : f
-          ));
-          
-          // Calculate total progress
+
+          // Update total progress
           setFiles(current => {
             const totalFiles = current.length;
             const totalProgress = current.reduce((sum, f) => sum + f.progress, 0);
-            setTotalProgress(totalProgress / totalFiles);
+            setTotalProgress(totalProgress / Math.max(totalFiles, 1));
             return current;
           });
-        },
-        onSuccess: () => {
-          // Extract file_id from upload URL
-          const fileId = upload.url?.split('/').pop();
-          
-          setFiles(prev => prev.map(f => 
-            f.id === uploadId 
-              ? { ...f, status: 'completed', file_id: fileId, progress: 100 }
+
+          resolve(firstId);
+        } catch (error: any) {
+          console.error('Upload failed:', error);
+          setFiles(prev => prev.map(f =>
+            f.id === uploadId
+              ? { ...f, status: 'error', error: error?.message || 'Upload failed' }
               : f
           ));
-          
-          resolve(fileId!);
+          reject(error);
         }
-      });
-
-      // Start upload
-      upload.start();
+      })();
     });
   }, []);
 

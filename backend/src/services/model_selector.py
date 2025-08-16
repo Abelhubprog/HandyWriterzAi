@@ -12,10 +12,66 @@ from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timedelta
 
 import redis.asyncio as redis
-from ..config.settings import get_settings
+from ..config import get_settings
 from ..services.budget import BudgetGuard, CostLevel
 from .model_policy import ModelPolicyRegistry, get_model_policy_registry, NodeCapabilityRequirement
-from .gateway import ModelSpec, LLMRequest, UnifiedLLMGateway, get_llm_gateway
+# Import gateway types lazily with fallbacks to avoid heavy deps at import-time
+try:
+    from src.services.gateway import ModelSpec, LLMRequest, UnifiedLLMGateway, get_llm_gateway  # type: ignore
+except Exception:  # pragma: no cover
+    from dataclasses import dataclass as _dataclass
+    from enum import Enum as _Enum
+    from typing import List as _List, Optional as _Optional, Dict as _Dict, Any as _Any
+
+    class _ProviderType(str, _Enum):
+        OPENROUTER = "openrouter"
+        DIRECT_OPENAI = "direct_openai"
+        DIRECT_ANTHROPIC = "direct_anthropic"
+        DIRECT_GEMINI = "direct_gemini"
+        DIRECT_PERPLEXITY = "direct_perplexity"
+
+    @_dataclass
+    class _ModelCapability:
+        streaming: bool = False
+        function_calling: bool = False
+        vision: bool = False
+        reasoning: bool = False
+        web_search: bool = False
+        long_context: bool = False
+        creative_writing: bool = False
+        code_generation: bool = False
+        json_mode: bool = False
+
+    @_dataclass
+    class ModelSpec:  # type: ignore
+        logical_id: str
+        provider: _ProviderType | str
+        provider_model_id: str
+        capabilities: _ModelCapability | _Dict[str, _Any]
+        cost_tier: "CostLevel"
+        context_window: int
+        input_cost_per_1k: float
+        output_cost_per_1k: float
+        fallback_models: _Optional[_List[str]] = None
+        admin_overridable: bool = True
+
+    @_dataclass
+    class LLMRequest:  # type: ignore
+        messages: _List[_Dict[str, str]]
+        model_spec: ModelSpec
+        node_name: str
+        trace_id: _Optional[str] = None
+        temperature: float = 0.7
+        max_tokens: _Optional[int] = None
+        stream: bool = False
+        capabilities: _List[str] | None = None
+        user_id: _Optional[str] = None
+
+    class UnifiedLLMGateway:  # type: ignore
+        pass
+
+    def get_llm_gateway():  # type: ignore
+        raise RuntimeError("LLM Gateway unavailable in lightweight mode")
 
 
 logger = logging.getLogger(__name__)
@@ -81,6 +137,8 @@ class SelectionContext:
     budget_remaining: Optional[float] = None
     previous_failures: List[str] = field(default_factory=list)
     trace_id: Optional[str] = None
+    # Rough token estimate for the request (messages + retrieved context)
+    estimated_tokens: Optional[int] = None
 
 
 @dataclass
@@ -125,10 +183,17 @@ class ModelSelector:
     
     async def select_model(self, context: SelectionContext) -> SelectionResult:
         """Select optimal model based on context and strategy"""
-        
+
         logger.info(f"Selecting model for {context.node_name} with strategy {context.strategy}")
-        
+
         try:
+            # If request looks large, force long_context capability
+            try:
+                if context.estimated_tokens and context.estimated_tokens > 120_000:
+                    # Augment capabilities in-place (copy to avoid side effects if shared)
+                    context.capabilities = list(set((context.capabilities or []) + ["long_context"]))
+            except Exception:
+                pass
             # Load performance metrics
             await self._load_performance_metrics()
             

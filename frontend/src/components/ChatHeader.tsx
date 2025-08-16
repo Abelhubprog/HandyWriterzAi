@@ -10,6 +10,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { UserMenu } from '@/components/UserMenu'
+import { CreditsBadge } from '@/components/CreditsBadge'
 
 interface ChatHeaderProps {
   conversationId?: string | null;
@@ -94,6 +96,10 @@ export function ChatHeader({
       </div>
       
       <div className="flex items-center gap-2">
+        {/* Credits + User */}
+        <CreditsBadge />
+        <UserMenu compact />
+
         {/* Export Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

@@ -10,13 +10,13 @@ from ...db.repositories.workbench_artifact_repo import WorkbenchArtifactReposito
 from ...db.repositories.workbench_section_status_repo import WorkbenchSectionStatusRepository
 from ...db.models import WorkbenchAssignmentStatus, ChunkStatus, HandyWriterzState, Conversation
 from ...agent.handywriterz_graph import graph as handywriterz_graph # Assuming this is the main graph
-from ...agent.sse import SSEPublisher # Assuming SSEPublisher is available
+from src.services.sse_service import get_sse_service  # type: ignore
 
 logger = logging.getLogger(__name__)
 
 class RepairController:
     def __init__(self):
-        self.sse_publisher = SSEPublisher() # Initialize SSEPublisher
+        self.sse = get_sse_service()
 
     async def run_section_repair(
         self,
@@ -60,7 +60,7 @@ class RepairController:
                 logger.info(f"Loaded conversation {conversation_id} for repair.")
             else:
                 logger.warning(f"Conversation {conversation_id} not found for repair. Cannot proceed.")
-                await self.sse_publisher.publish(
+                await self.sse.publish_event(
                     str(conversation_id),
                     "repair_failed",
                     {"message": f"Conversation {conversation_id} not found for repair."}
@@ -69,17 +69,17 @@ class RepairController:
 
         if not initial_state:
             logger.error(f"Could not initialize state for repair of conversation {conversation_id}.")
-            await self.sse_publisher.publish(
+            await self.sse.publish_event(
                 str(conversation_id),
                 "repair_failed",
                 {"message": "Could not initialize workflow state for repair."}
             )
             return
 
-        await self.sse_publisher.publish(
+        await self.sse.publish_event(
             str(conversation_id),
             "repair_started",
-            {"sections": sections, "guidance": guidance, "timestamp": datetime.utcnow().isoformat()}
+            {"sections": sections, "guidance": guidance}
         )
 
         config = {"configurable": {"thread_id": str(conversation_id)}}
@@ -92,10 +92,10 @@ class RepairController:
         # Placeholder for actual LangGraph execution for specific sections
         for section_id in sections:
             logger.info(f"Repairing section: {section_id} for conversation {conversation_id}")
-            await self.sse_publisher.publish(
+            await self.sse.publish_event(
                 str(conversation_id),
                 "section_repair_progress",
-                {"section_id": section_id, "status": "in_progress", "message": f"Processing section {section_id}...", "timestamp": datetime.utcnow().isoformat()}
+                {"section_id": section_id, "status": "in_progress", "message": f"Processing section {section_id}..."}
             )
 
             # Simulate agent work for this section
@@ -112,16 +112,16 @@ class RepairController:
                 )
                 db.commit() # Commit changes to section status
 
-            await self.sse_publisher.publish(
+            await self.sse.publish_event(
                 str(conversation_id),
                 "section_repair_progress",
-                {"section_id": section_id, "status": "completed", "message": f"Section {section_id} repair complete.", "timestamp": datetime.utcnow().isoformat()}
+                {"section_id": section_id, "status": "completed", "message": f"Section {section_id} repair complete."}
             )
 
-        await self.sse_publisher.publish(
+        await self.sse.publish_event(
             str(conversation_id),
             "repair_completed",
-            {"sections": sections, "message": "All specified sections repaired.", "timestamp": datetime.utcnow().isoformat()}
+            {"sections": sections, "message": "All specified sections repaired."}
         )
         logger.info(f"Repair completed for conversation {conversation_id}.")
 

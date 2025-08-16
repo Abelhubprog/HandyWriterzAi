@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 class EventType(Enum):
     START = "start"
+    FILE_PROCESSING = "file_processing"
     ROUTING = "routing"
     NODE_START = "node_start"
     CONTENT = "content"
@@ -33,6 +34,7 @@ class EventType(Enum):
 
 class Phase(Enum):
     INIT = "init"
+    FILE_PROCESSING = "file_processing"
     RESEARCH = "research"
     AGGREGATION = "aggregation"
     WRITING = "writing"
@@ -52,13 +54,13 @@ class SSEEvent:
     node_name: Optional[str] = None
     phase: Optional[Phase] = None
     data: Dict[str, Any] = None
-    
+
     def __post_init__(self):
         if not self.timestamp:
             self.timestamp = datetime.utcnow().isoformat()
         if self.data is None:
             self.data = {}
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary with enum serialization"""
         result = asdict(self)
@@ -72,7 +74,7 @@ class SSEPublisher:
     Unified SSE Publisher with schema validation, backpressure control, and feature flag support.
     Handles both Redis pub/sub and direct WebSocket streaming.
     """
-    
+
     def __init__(
         self,
         redis_client: redis.Redis,
@@ -84,16 +86,16 @@ class SSEPublisher:
         self.schema_validation = schema_validation
         self.max_queue_size = max_queue_size
         self.enable_legacy_publish = enable_legacy_publish
-        
+
         # Event queues per conversation
         self.event_queues: Dict[str, asyncio.Queue] = {}
         self.sequence_counters: Dict[str, int] = {}
-        
+
         # Schema validator
         self.schema: Optional[Dict[str, Any]] = None
         if schema_validation:
             self._load_schema()
-        
+
         # Metrics
         self.metrics = {
             "events_published": 0,
@@ -101,19 +103,19 @@ class SSEPublisher:
             "validation_errors": 0,
             "queue_overflows": 0
         }
-        
+
         # Active streams tracking
         self.active_streams: Set[str] = set()
-        
+
         # Background tasks
         self.background_tasks: List[asyncio.Task] = []
         self.running = False
-    
+
     def _load_schema(self):
         """Load and parse the SSE schema"""
         try:
             schema_path = os.path.join(os.path.dirname(__file__), "../schemas/sse_v1.json")
-            
+
             if os.path.exists(schema_path):
                 with open(schema_path, 'r') as f:
                     self.schema = json.load(f)
@@ -124,36 +126,36 @@ class SSEPublisher:
         except Exception as e:
             logger.error(f"Failed to load SSE schema: {e}")
             self.schema_validation = False
-    
+
     async def start(self):
         """Start the publisher and background tasks"""
         self.running = True
-        
+
         # Start background queue processors
         self.background_tasks = [
             asyncio.create_task(self._queue_processor()),
             asyncio.create_task(self._metrics_reporter())
         ]
-        
+
         logger.info("SSE Publisher started")
-    
+
     async def stop(self):
         """Stop the publisher and cleanup resources"""
         self.running = False
-        
+
         # Cancel background tasks
         for task in self.background_tasks:
             task.cancel()
-        
+
         await asyncio.gather(*self.background_tasks, return_exceptions=True)
-        
+
         # Clear queues
         self.event_queues.clear()
         self.sequence_counters.clear()
         self.active_streams.clear()
-        
+
         logger.info("SSE Publisher stopped")
-    
+
     async def publish_event(
         self,
         correlation_id: str,
@@ -167,11 +169,11 @@ class SSEPublisher:
         Publish a unified SSE event with validation and queuing.
         Returns True if event was queued successfully, False if dropped.
         """
-        
+
         # Get next sequence number
         seq = self.sequence_counters.get(correlation_id, 0)
         self.sequence_counters[correlation_id] = seq + 1
-        
+
         # Create event
         event = SSEEvent(
             event_type=event_type,
@@ -182,34 +184,34 @@ class SSEPublisher:
             phase=phase,
             data=data
         )
-        
+
         # Validate if enabled
         if self.schema_validation and not self._validate_event(event):
             self.metrics["validation_errors"] += 1
             logger.warning(f"Event validation failed for {correlation_id}:{event_type.value}")
             return False
-        
+
         # Check queue capacity and add to queue
         if correlation_id not in self.event_queues:
             self.event_queues[correlation_id] = asyncio.Queue(maxsize=self.max_queue_size)
-        
+
         queue = self.event_queues[correlation_id]
-        
+
         try:
             # Non-blocking put with overflow handling
             queue.put_nowait(event)
             return True
-            
+
         except asyncio.QueueFull:
             # Handle backpressure
             await self._handle_queue_overflow(correlation_id, event)
             return False
-    
+
     def _validate_event(self, event: SSEEvent) -> bool:
         """Validate event against JSON schema"""
         if not self.schema:
             return True
-        
+
         try:
             event_dict = event.to_dict()
             jsonschema.validate(event_dict, self.schema)
@@ -220,18 +222,18 @@ class SSEPublisher:
         except Exception as e:
             logger.warning(f"Unexpected validation error: {e}")
             return False
-    
+
     async def _handle_queue_overflow(self, correlation_id: str, event: SSEEvent):
         """Handle queue overflow with intelligent backpressure"""
         self.metrics["queue_overflows"] += 1
-        
+
         queue = self.event_queues[correlation_id]
-        
+
         # Strategy 1: Drop older progress events in favor of new ones
         if event.event_type in [EventType.PROGRESS, EventType.CONTENT]:
             dropped_count = 0
             temp_events = []
-            
+
             # Extract all events
             while not queue.empty():
                 try:
@@ -243,14 +245,14 @@ class SSEPublisher:
                         temp_events.append(old_event)
                 except asyncio.QueueEmpty:
                     break
-            
+
             # Put back non-progress events and new event
             for old_event in temp_events:
                 try:
                     queue.put_nowait(old_event)
                 except asyncio.QueueFull:
                     break
-            
+
             try:
                 queue.put_nowait(event)
                 if dropped_count > 0:
@@ -258,11 +260,11 @@ class SSEPublisher:
             except asyncio.QueueFull:
                 # Still couldn't fit, emit flow control warning
                 await self._emit_flow_control_warning(correlation_id)
-        
+
         else:
             # For critical events, emit flow control warning
             await self._emit_flow_control_warning(correlation_id)
-    
+
     async def _emit_flow_control_warning(self, correlation_id: str):
         """Emit a flow control warning event"""
         warning_event = SSEEvent(
@@ -276,10 +278,10 @@ class SSEPublisher:
                 "retryable": False
             }
         )
-        
+
         # Try to publish warning (bypass normal queue)
         await self._direct_publish(warning_event)
-    
+
     async def _queue_processor(self):
         """Background task to process event queues"""
         while self.running:
@@ -287,46 +289,46 @@ class SSEPublisher:
                 # Process all active queues
                 for correlation_id in list(self.event_queues.keys()):
                     queue = self.event_queues[correlation_id]
-                    
+
                     # Process up to 10 events per queue per iteration
                     for _ in range(10):
                         try:
                             event = queue.get_nowait()
                             await self._direct_publish(event)
                             self.metrics["events_published"] += 1
-                            
+
                         except asyncio.QueueEmpty:
                             break
                         except Exception as e:
                             logger.error(f"Error processing event for {correlation_id}: {e}")
                             self.metrics["events_dropped"] += 1
-                
+
                 # Cleanup empty queues
                 empty_queues = [
                     cid for cid, queue in self.event_queues.items()
                     if queue.empty() and cid not in self.active_streams
                 ]
-                
+
                 for cid in empty_queues:
                     del self.event_queues[cid]
                     if cid in self.sequence_counters:
                         del self.sequence_counters[cid]
-                
+
                 await asyncio.sleep(0.01)  # 10ms processing interval
-                
+
             except Exception as e:
                 logger.error(f"Queue processor error: {e}")
                 await asyncio.sleep(1)
-    
+
     async def _direct_publish(self, event: SSEEvent):
         """Directly publish event to Redis and WebSocket channels"""
         event_dict = event.to_dict()
         event_json = json.dumps(event_dict)
-        
+
         # Unified channel publish
         unified_channel = f"sse:unified:{event.correlation_id}"
         await self.redis.publish(unified_channel, event_json)
-        
+
         # Legacy publish if enabled (for canary deployments)
         if self.enable_legacy_publish:
             legacy_channel = f"sse:legacy:{event.correlation_id}"
@@ -335,7 +337,7 @@ class SSEPublisher:
                 "data": event.data
             }
             await self.redis.publish(legacy_channel, json.dumps(legacy_data))
-    
+
     async def _metrics_reporter(self):
         """Background task to report metrics"""
         while self.running:
@@ -345,21 +347,21 @@ class SSEPublisher:
                     "handywriterz:sse_metrics",
                     mapping=self.metrics
                 )
-                
+
                 await asyncio.sleep(60)  # Report every minute
-                
+
             except Exception as e:
                 logger.error(f"Metrics reporter error: {e}")
                 await asyncio.sleep(60)
-    
+
     def register_stream(self, correlation_id: str):
         """Register an active stream to prevent queue cleanup"""
         self.active_streams.add(correlation_id)
-    
+
     def unregister_stream(self, correlation_id: str):
         """Unregister a stream when client disconnects"""
         self.active_streams.discard(correlation_id)
-    
+
     async def get_metrics(self) -> Dict[str, Any]:
         """Get publisher metrics"""
         return {
@@ -369,9 +371,9 @@ class SSEPublisher:
             "schema_validation_enabled": self.schema_validation,
             "legacy_publish_enabled": self.enable_legacy_publish
         }
-    
+
     # Convenience methods for common event types
-    
+
     async def publish_start(
         self,
         correlation_id: str,
@@ -394,7 +396,7 @@ class SSEPublisher:
                 "estimated_duration": estimated_duration
             }
         )
-    
+
     async def publish_routing(
         self,
         correlation_id: str,
@@ -417,7 +419,7 @@ class SSEPublisher:
                 "estimated_cost": estimated_cost
             }
         )
-    
+
     async def publish_content(
         self,
         correlation_id: str,
@@ -443,7 +445,7 @@ class SSEPublisher:
                 "word_count": len(content.split()) if content else 0
             }
         )
-    
+
     async def publish_progress(
         self,
         correlation_id: str,
@@ -469,7 +471,7 @@ class SSEPublisher:
                 "total_tasks": total_tasks
             }
         )
-    
+
     async def publish_error(
         self,
         correlation_id: str,
@@ -497,7 +499,7 @@ class SSEPublisher:
                 "retry_after_seconds": retry_after_seconds
             }
         )
-    
+
     async def publish_done(
         self,
         correlation_id: str,
@@ -522,6 +524,19 @@ class SSEPublisher:
                 "word_count": word_count,
                 "quality_metrics": quality_metrics,
                 "output_sections": output_sections
+            }
+        )
+
+    async def publish_heartbeat(self, correlation_id: str, trace_id: Optional[str] = None):
+        """Publish a heartbeat event for SSE clients to detect liveness."""
+        return await self.publish_event(
+            correlation_id=correlation_id,
+            event_type=EventType.PROGRESS,
+            phase=Phase.INIT,
+            trace_id=trace_id,
+            data={
+                "heartbeat": True,
+                "timestamp": datetime.utcnow().isoformat()
             }
         )
 

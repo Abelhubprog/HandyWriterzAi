@@ -62,3 +62,28 @@ This guide provides instructions on how to set up and run the backend and fronte
     ```
 
 The frontend will be available at `http://localhost:3000`.
+
+---
+
+## WSL (Ubuntu) Dev Setup
+
+If you are using VS Code in a WSL Ubuntu 24.04 terminal, do not use Windows PowerShell activation paths like `d:/.../.venv/Scripts/activate`. Create/activate a Linux venv inside WSL and run the dev script:
+
+1) Create a Linux venv and install backend deps
+
+```bash
+cd /mnt/d/HandyWriterzAi
+python3 -m venv .venv
+source .venv/bin/activate
+make install-deps
+```
+
+2) Start dev (Redis + backend + frontend)
+
+```bash
+./start-local.sh
+```
+
+Notes:
+- VS Code is configured to use the WSL venv automatically (`.vscode/settings.json` sets the interpreter to `.venv/bin/python`).
+- If you accidentally created a Windows venv, remove it (`rm -rf .venv`) and recreate it from WSL with `python3 -m venv .venv`.

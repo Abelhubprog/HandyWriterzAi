@@ -3,10 +3,13 @@ from httpx import AsyncClient
 from backend.src.main import app
 
 @pytest.mark.asyncio
-async def test_chat_validation():
+async def test_chat_init_returns_trace_id():
     async with AsyncClient(app=app, base_url="http://test") as ac:
         response = await ac.post("/api/chat", json={"prompt": "Hi", "mode": "essay"})
-    assert response.status_code == 422
+    assert response.status_code in (200, 202)
+    data = response.json()
+    assert data.get("status") == "accepted"
+    assert isinstance(data.get("trace_id"), str) and data["trace_id"]
 
 @pytest.mark.asyncio
 async def test_get_billing_summary():

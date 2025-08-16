@@ -17,16 +17,18 @@ export async function GET(
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
 
+  // Helpful headers to reduce buffering by proxies/CDNs
+  const proxyHeaders: HeadersInit = {
+    'Accept': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+  };
+
   // Connect to backend SSE endpoint
   const backendUrl = `${BACKEND_URL}/api/stream/${traceId}`;
 
   // Start the SSE connection to backend
-  fetch(backendUrl, {
-    headers: {
-      'Accept': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-    },
-  })
+  fetch(backendUrl, { headers: proxyHeaders })
     .then(async (response) => {
       if (!response.ok) {
         await writer.write(encoder.encode(`data: ${JSON.stringify({ type: 'error', message: 'Failed to connect to backend' })}\n\n`));
@@ -53,15 +55,15 @@ export async function GET(
         buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.trim()) {
-            // Forward the SSE data
+          if (line.startsWith('data: ')) {
+            // Forward the SSE data line as-is
             await writer.write(encoder.encode(line + '\n'));
+            // Flush record separator
+            await writer.write(encoder.encode('\n'));
+          } else if (line.trim().length === 0) {
+            // preserve boundaries
+            await writer.write(encoder.encode('\n'));
           }
-        }
-
-        // Ensure double newline for SSE format
-        if (lines.length > 0) {
-          await writer.write(encoder.encode('\n'));
         }
       }
 
@@ -76,10 +78,12 @@ export async function GET(
   // Return SSE response
   return new Response(stream.readable, {
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
       'X-Accel-Buffering': 'no',
+      // Safari friendliness
+      'Transfer-Encoding': 'chunked',
     },
   });
 }

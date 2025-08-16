@@ -5,24 +5,24 @@ This allows for easy updates and management of models for different tasks.
 
 # Model settings for various agent tasks
 MODEL_CONFIG = {
-    "intent_parser": "gemini-2.5-pro",
-    "planner": "gemini-2.5-pro",
+    "intent_parser": "chatgpt-5-thinking",
+    "planner": "chatgpt-5-thinking",
     "search": {
-        "primary": "perplexity",
-        "secondary": "gemini-2.5-pro",
+        "primary": "chatgpt-o3-high",
+        "secondary": "sonar-deep",
     },
     "writing": {
-        "primary": "gemini-2.5-pro",
-        "fallback": "gemini-2.0-pro"
+        "primary": "gemini-2.5-pro-direct",
+        "fallback": "gemini-2.5-pro"
     },
     "evaluation": {
-        "primary": "gemini-2.5-pro",
+        "primary": "claude-opus-4",
     },
     "orchestration": {
-        "strategic_planner": "gemini-2.5-pro",
-        "quality_assessor": "gemini-2.5-pro",
-        "workflow_optimizer": "gemini-2.5-pro",
-        "innovation_catalyst": "gemini-2.5-pro",
+        "strategic_planner": "o3-reasoner",
+        "quality_assessor": "claude-opus-4",
+        "workflow_optimizer": "gemini-3.0-pro",
+        "innovation_catalyst": "claude-sonnet-4",
     },
 }
 

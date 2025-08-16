@@ -83,19 +83,13 @@ class MigratedWriterAgent(StreamingNode):
             self.logger.info("🎯 Writer Agent: Starting content generation with new gateway")
             self._broadcast_progress(state, "Initializing intelligent writing system", 5)
 
-            # Emit SSE: writer_started (via unified publisher on routing layer channel)
+            # Emit SSE: writer_started via SSEService
             try:
-                from src.agent.sse import SSEPublisher  # type: ignore
-                import redis.asyncio as _redis  # type: ignore
-                import os as _os
-                _publisher = SSEPublisher(async_redis=_redis.from_url(_os.getenv("REDIS_URL", "redis://localhost:6379")))
-                await _publisher.publish(
-                    state.get("conversation_id"),
-                    "writer_started",
-                    {"node": "writer", "ts": datetime.utcnow().isoformat()}
-                )
+                from src.services.sse_service import get_sse_service
+                cid = state.get("conversation_id")
+                if cid:
+                    await get_sse_service().publish_event(cid, "writer_started", {"node": "writer"})
             except Exception:
-                # Non-fatal if SSE not available in this environment
                 pass
 
             # Extract and validate inputs (unchanged)
@@ -268,23 +262,17 @@ class MigratedWriterAgent(StreamingNode):
                     full_content += chunk["token"]
                     model_used = chunk.get("model", model_used)
 
-                    # Publish SSE token delta for live UI rendering
+                    # Publish SSE token delta via SSEService
                     try:
-                        from src.agent.sse import SSEPublisher  # type: ignore
-                        import redis.asyncio as _redis  # type: ignore
-                        import os as _os
-                        _publisher = SSEPublisher(async_redis=_redis.from_url(_os.getenv("REDIS_URL", "redis://localhost:6379")))
-                        await _publisher.publish(
-                            state.get("conversation_id"),
-                            "token",
-                            {
-                                "delta": chunk["token"],
-                                "cursor": {"message_id": state.get("conversation_id"), "index": 0},
-                                "ts": datetime.utcnow().isoformat()
-                            }
-                        )
+                        from src.services.sse_service import get_sse_service
+                        cid = state.get("conversation_id")
+                        if cid:
+                            await get_sse_service().publish_event(
+                                cid,
+                                "token",
+                                {"delta": chunk["token"], "cursor": {"message_id": cid, "index": 0}}
+                            )
                     except Exception:
-                        # Non-fatal if SSE not available
                         pass
 
                     # Update progress every 50 words (unchanged)

@@ -4,71 +4,106 @@ logical_models:
     provider: openai
     model_id: o1-preview
     description: "Advanced reasoning model for complex tasks"
-    
+
   o3-reasoner-mini:
     provider: openai
     model_id: o1-mini
     description: "Lightweight reasoning model"
-    
+
   sonar-deep:
     provider: perplexity
     model_id: llama-3.1-sonar-large-128k-online
     description: "Deep web search with large context"
-    
+
   sonar-fast:
     provider: perplexity
     model_id: llama-3.1-sonar-small-128k-online
     description: "Fast web search"
-    
+
   gemini-pro:
     provider: gemini
     model_id: gemini-pro
     description: "Google's flagship model"
-    
+
   gemini-flash:
     provider: gemini
     model_id: gemini-1.5-flash
     description: "Fast Gemini model"
-    
+
   gemini-2.5-pro:
     provider: gemini
     model_id: gemini-2.0-flash-exp
     description: "Latest Gemini experimental model"
-    
+
   gemini-2.5-flash:
     provider: gemini
     model_id: gemini-1.5-flash
     description: "Fast Gemini flash model"
-    
+
+  gemini-3.0-pro:
+    provider: gemini
+    model_id: gemini-3.0-pro-exp
+    description: "Next generation Gemini model"
+
   claude-opus:
     provider: anthropic
     model_id: claude-3-opus-20240229
     description: "Most capable Claude model"
-    
+
   claude-sonnet:
     provider: anthropic
     model_id: claude-3-sonnet-20240229
     description: "Balanced Claude model"
-    
+
   claude-haiku:
     provider: anthropic
     model_id: claude-3-haiku-20240307
     description: "Fast Claude model"
-    
+
+  claude-sonnet-4:
+    provider: anthropic
+    model_id: claude-4-sonnet
+    description: "Latest Claude Sonnet model"
+
+  claude-opus-4:
+    provider: anthropic
+    model_id: claude-4-opus
+    description: "Most capable Claude model"
+
+  chatgpt-o3-high:
+    provider: openrouter
+    model_id: openai/o3
+    description: "OpenAI o3 high reasoning via OpenRouter"
+
+  chatgpt-5-thinking:
+    provider: openrouter
+    model_id: openai/gpt-5
+    description: "OpenAI GPT-5 Thinking via OpenRouter"
+
   kimi-k2:
     provider: openrouter
     model_id: deepseek/deepseek-chat
     description: "Alternative reasoning model"
 
+  kimi-k3:
+    provider: openrouter
+    model_id: deepseek/deepseek-coder
+    description: "Latest Kimi K3 coding model"
+
 defaults:
+  # Core pipeline roles
+  planner: chatgpt-5-thinking
+  research: chatgpt-o3-high
   writer: gemini-2.5-pro
   formatter: gemini-2.5-flash
-  search_primary: o3-reasoner
+  # Retrieval/search agents
+  search_primary: chatgpt-o3-high
   search_secondary: sonar-deep
-  search_fallback: kimi-k2
+  search_fallback: claude-sonnet-4
+  # Quality
   qa: o3-reasoner-mini
-  evaluator: claude-opus
-  evaluator_advanced: claude-opus
+  evaluator: claude-opus-4
+  evaluator_advanced: claude-opus-4
 
 override_allowlist:
   - writer

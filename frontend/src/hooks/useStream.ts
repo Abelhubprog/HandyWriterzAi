@@ -33,12 +33,16 @@ interface StreamState {
   qualityScore: number;
   derivatives: { kind: string; url: string }[];
   sources: Record<string, SourceItem>;
+  lastHeartbeatTs: number | null;
+  lastError: string | null;
   addEvent: (event: TimelineEvent) => void;
   appendStreamingText: (text: string) => void;
   appendReasoningText: (text: string) => void;
   setMetrics: (metrics: { cost?: number; plagiarismScore?: number; qualityScore?: number }) => void;
   addDerivative: (derivative: { kind: string; url: string }) => void;
   setSourcesSnapshot: (sources: SourceItem[]) => void;
+  setHeartbeat: (ts: number) => void;
+  setError: (message: string | null) => void;
   reset: () => void;
 }
 
@@ -51,6 +55,8 @@ const useStreamStore = create<StreamState>((set) => ({
   qualityScore: 0,
   derivatives: [],
   sources: {},
+  lastHeartbeatTs: null,
+  lastError: null,
   addEvent: (event) => set((state) => {
     const next = [...state.events, event];
     return { events: next.slice(-300) };
@@ -66,6 +72,8 @@ const useStreamStore = create<StreamState>((set) => ({
         return acc;
       }, {} as Record<string, SourceItem>),
     })),
+  setHeartbeat: (ts) => set(() => ({ lastHeartbeatTs: ts })),
+  setError: (message) => set(() => ({ lastError: message })),
   reset: () => set({
     events: [],
     streamingText: '',
@@ -74,7 +82,9 @@ const useStreamStore = create<StreamState>((set) => ({
     plagiarismScore: 0,
     qualityScore: 0,
     derivatives: [],
-    sources: {}
+    sources: {},
+    lastHeartbeatTs: null,
+    lastError: null,
   })
 }));
 
@@ -122,14 +132,35 @@ export function useStream(traceId: string | null, options?: UseStreamOptions) {
     store.reset();
 
     if (traceId) {
-      const backendUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
-      const sseUrl = `${backendUrl}/api/stream/${traceId}`;
+      // Connect to unified SSE stream for this conversation
+      const sseUrl = `/api/stream/${traceId}`;
+      // Prefetch replay snapshot to seed timeline before new events arrive
+      (async () => {
+        try {
+          const res = await fetch(`${sseUrl}/replay`)
+          if (res.ok) {
+            const data = await res.json()
+            const evts: any[] = Array.isArray(data?.events) ? data.events : []
+            for (const evt of evts) {
+              if (evt && typeof evt === 'object') {
+                // Normalize alternate keys for safety
+                if (evt.content && !evt.text) evt.text = evt.content
+                if (evt.token && !evt.delta) evt.delta = evt.token
+                store.addEvent(evt as any)
+              }
+            }
+          }
+        } catch (e) {
+          // silent fail to avoid blocking stream
+        }
+      })();
       const eventSource = new EventSource(sseUrl);
       eventSourceRef.current = eventSource;
 
       eventSource.onopen = () => {
         setIsConnected(true);
         console.log(`SSE connection established for trace: ${traceId}`);
+        store.setHeartbeat(Date.now());
       };
 
       eventSource.onerror = (error) => {
@@ -147,7 +178,40 @@ export function useStream(traceId: string | null, options?: UseStreamOptions) {
             optionsRef.current.onMessage(data);
           }
 
+          // Normalize alternate keys for safety
+          if (data.content && !data.text) {
+            data.text = data.content;
+          }
+          if (data.token && !data.delta) {
+            data.delta = data.token;
+          }
+
           switch (data.type) {
+            case 'agent:start':
+            case 'agent:tool':
+            case 'agent:result': {
+              // message may be a JSON string with {agent,...}
+              let details: any = {}
+              try {
+                if (typeof data.message === 'string') details = JSON.parse(data.message)
+              } catch {}
+              store.addEvent({ type: data.type, ...details, ts: data.ts })
+              break;
+            }
+            case 'connected':
+              store.setHeartbeat(Date.now());
+              break;
+            case 'heartbeat':
+              store.setHeartbeat(Date.now());
+              break;
+
+            // Accept generic progress:* events as timeline entries
+            default:
+              if (typeof data.type === 'string' && data.type.startsWith('progress:')) {
+                store.addEvent({ type: data.type, ...data, ts: data.ts });
+                break;
+              }
+              // fallthrough to specific handlers
             case 'planning_started':
               store.addEvent({ type: 'planning_started', ts: data.ts });
               break;
@@ -159,6 +223,12 @@ export function useStream(traceId: string | null, options?: UseStreamOptions) {
                 progress: data.progress ?? undefined,
                 ts: data.ts
               });
+              break;
+            case 'node_start':
+              store.addEvent({ type: 'node_start', node: data.node, ts: data.ts });
+              break;
+            case 'node_end':
+              store.addEvent({ type: 'node_end', node: data.node, ts: data.ts });
               break;
             case 'sources_update':
               if (Array.isArray(data.sources)) {
@@ -178,6 +248,13 @@ export function useStream(traceId: string | null, options?: UseStreamOptions) {
                 scheduleFlush();
               }
               break;
+            case 'progress': {
+              // Accept numeric progress; if <=1 treat as ratio, if <=100 treat as percent
+              const p = typeof data.progress === 'number' ? data.progress : undefined;
+              const pct = p != null ? (p <= 1 ? Math.round(p * 100) : (p <= 100 ? Math.round(p) : undefined)) : undefined;
+              store.addEvent({ type: 'progress', node: data.node, progress: pct, progressRaw: p, ts: data.ts });
+              break;
+            }
             case 'content':
               if (data.text) {
                 bufferRef.current += data.text;
@@ -206,8 +283,13 @@ export function useStream(traceId: string | null, options?: UseStreamOptions) {
               if (optionsRef.current?.onClose) optionsRef.current.onClose();
               break;
             case 'error':
-              store.addEvent({ type: 'error', text: data.message, ts: data.ts });
+              store.addEvent({ type: 'error', text: data.message || data.error, ts: data.ts });
+              store.setError(data.message || data.error || 'Streaming error');
+              eventSource.close();
+              setIsConnected(false);
+              if (optionsRef.current?.onClose) optionsRef.current.onClose();
               break;
+
             // Back-compat legacy events
             case 'thinking':
               if (data.text) store.appendReasoningText(data.text);
@@ -224,8 +306,15 @@ export function useStream(traceId: string | null, options?: UseStreamOptions) {
                 store.addDerivative({ kind: data.kind, url: data.url });
               }
               break;
-            default:
-              store.addEvent(data as TimelineEvent);
+            case 'file_processing':
+              store.addEvent({ type: 'file_processing', status: data.status, file_id: data.file_id, ts: data.ts });
+              break;
+            case 'files:status':
+              store.addEvent({ type: 'files:status', status: data.status, extra: data.extra, ts: data.ts });
+              break;
+
+            // Unknown → keep timeline
+            // default handled above
           }
         } catch (e) {
           console.error('Failed to parse SSE message:', e);

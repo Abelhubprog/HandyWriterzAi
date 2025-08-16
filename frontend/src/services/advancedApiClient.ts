@@ -82,8 +82,10 @@ export class AdvancedApiClient extends EventEmitter {
   constructor(config: Partial<ApiConfig> = {}) {
     super();
     
+    const isBrowser = typeof window !== 'undefined';
     this.config = {
-      baseUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+      // In the browser, prefer relative base URL so requests go through Next routes/proxy
+      baseUrl: isBrowser ? '' : (process.env.NEXT_PUBLIC_API_BASE_URL || ''),
       timeout: 30000,
       retryAttempts: 3,
       retryDelay: 1000,
@@ -390,59 +392,125 @@ export class AdvancedApiClient extends EventEmitter {
   }
 
   /**
-   * Stream response handler
+   * Stream response handler with timeout and better error handling
    */
   async streamResponse(
     endpoint: string,
     options: RequestOptions = {},
     onChunk?: (chunk: any) => void
   ): Promise<void> {
-    const response = await fetch(`${this.config.baseUrl}${endpoint}`, {
-      method: options.method || 'GET',
-      headers: {
-        'Authorization': `Bearer ${this.getAuthToken()}`,
-        ...options.headers
-      },
-      body: options.body ? JSON.stringify(options.body) : undefined
-    });
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutMs = options.timeout || 30000; // 30 second default timeout
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
 
-    if (!response.ok) {
-      throw this.createError(
-        `STREAM_ERROR_${response.status}`,
-        'Stream request failed',
-        response.status
-      );
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error('No readable stream');
-    }
-
-    const decoder = new TextDecoder();
-    
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done) break;
-        
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              onChunk?.(data);
-            } catch (error) {
-              console.error('Error parsing SSE data:', error);
+      const response = await fetch(`${this.config.baseUrl}${endpoint}`, {
+        method: options.method || 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.getAuthToken()}`,
+          'Accept': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          ...options.headers
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined,
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        throw this.createError(
+          `STREAM_ERROR_${response.status}`,
+          `SSE connection failed: ${response.status} ${response.statusText}`,
+          response.status
+        );
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No readable stream available');
+      }
+
+      const decoder = new TextDecoder();
+      
+      // Send connection established event
+      onChunk?.({ type: 'connected', message: 'SSE connection established' });
+
+      let buffer = '';
+      let hasReceivedData = false;
+      
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) break;
+          
+          hasReceivedData = true;
+          clearTimeout(timeoutId);
+          
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep incomplete line in buffer
+          
+          for (const line of lines) {
+            if (line.trim() === '') continue;
+            
+            if (line.startsWith('data: ')) {
+              try {
+                const dataStr = line.slice(6);
+                if (dataStr === '[DONE]') {
+                  onChunk?.({ type: 'done', message: 'Stream completed' });
+                  return;
+                }
+                const data = JSON.parse(dataStr);
+                onChunk?.(data);
+              } catch (error) {
+                console.error('Error parsing SSE data:', error, 'Line:', line);
+                onChunk?.({ type: 'parse_error', error: `Parse error: ${error}` });
+              }
             }
           }
+
+          // Reset timeout after receiving data
+          const newTimeoutId = setTimeout(() => {
+            controller.abort();
+          }, 15000); // 15 second inactivity timeout
+          clearTimeout(timeoutId);
         }
+
+        // If we exit normally but never got data, that's suspicious
+        if (!hasReceivedData) {
+          throw new Error('SSE stream ended without receiving any data');
+        }
+
+      } finally {
+        reader.releaseLock();
+        clearTimeout(timeoutId);
       }
-    } finally {
-      reader.releaseLock();
+
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      
+      if (error.name === 'AbortError') {
+        throw this.createError(
+          'STREAM_TIMEOUT',
+          'SSE connection timed out - backend may be unresponsive or Redis unavailable',
+          408
+        );
+      }
+      
+      if (error.message?.includes('fetch') || error.message?.includes('network')) {
+        throw this.createError(
+          'STREAM_CONNECTION_FAILED',
+          'Failed to connect to streaming endpoint - check if backend is running',
+          503
+        );
+      }
+      
+      throw error;
     }
   }
 

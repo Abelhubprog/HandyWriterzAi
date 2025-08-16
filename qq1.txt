@@ -1,0 +1,138 @@
+1. Agent and Orchestration Core
+ Audit and refactor all agent entrypoints: backend/src/agent/app.py, handywriterz_graph.py, base.py.
+
+ Add docstrings and type hints for each exported function.
+
+ Ensure every agent class has: receive_input, process, emit_output methods.
+
+ Validate and document all nodes in backend/src/agent/nodes/.
+
+ List all nodes and their roles (e.g. aggregator, memory_integrator_node, planner, fail_handler).
+
+ For each: confirm signature, input/output contract, error handling.
+
+ Swarm Orchestration
+
+ Review and debug orchestration logic (orchestration/, swarm_coordinator.py).
+
+ Create sequence diagrams for “prompt → swarm → output” for all main flows.
+
+ Implement logging for every message handoff between agents.
+
+2. Agent State & Memory (Crucial!)
+ Review and update memory handling logic (memory_integrator_node.py, memory_writer.py, memory_retriever.py, memory_integrator.py, README_MEMORY.md).
+
+ Standardize memory API (read, write, retrieve, clear).
+
+ Add integration tests: agent output → write to memory → retrieve on next call.
+
+ Build a minimal “memory demo agent” to prove round-trip persistence.
+
+ If vector DB (pgvector) is used, ensure semantic memory queries work (test for leaks and silent failures).
+
+ Document memory lifecycle: where it’s stored, when it’s loaded, when it’s cleared (per user/session/agent?).
+
+3. Multi-Model and Provider Wiring
+ Ensure model selection is working and dynamic.
+
+ backend/src/models/ and config/model_config.yaml: audit all models and update to only SOTA models (e.g. Gemini 2.5 Pro, O3, Claude Opus, Kimi K2, etc.).
+
+ Add endpoint (or admin panel) to change model assignments at runtime.
+
+ Integration test: swap model for intent_analyzer, confirm output changes.
+
+ Validate all provider classes in models/ for working API keys, error surfaces, and retry logic.
+
+ Add coverage for streaming and non-streaming responses per model/provider.
+
+4. Streaming & Real-Time Feedback
+ Test all SSE endpoints (agent/sse.py, sse_unified.py, frontend chat hooks).
+
+ Confirm client receives live tokens/messages as they’re generated.
+
+ Inject artificial delays/errors to verify robust frontend updates/errors.
+
+ On the frontend, ensure hooks (useChatStream, useStream, etc.) are robust against dropped/duplicate messages.
+
+5. Full-stack Agentic User Journey
+ Map every route a user takes: file upload → prompt entry → agentic swarm → streaming output → download/export.
+
+ For each step, write an e2e test (backend/tests/e2e/test_full_flow.py).
+
+ Confirm all agents are invoked, memory persists, output is streamed and stored.
+
+ For each writing type, validate that the correct agents and models are called (test via dropdown selection, prompt, file context).
+
+ Build smoke tests that:
+
+ Upload a doc, run through all agents, get output, check for errors.
+
+ Repeat for multimodal (audio/image) inputs.
+
+6. Frontend <-> Backend Integration
+ Refactor chat UI components to ensure unified, ChatGPT-like experience (see EnhancedChatView.tsx, MessageInputBar.tsx, ImprovedInputForm.tsx).
+
+ Confirm chat messages, uploads, agent outputs, and streaming work end-to-end.
+
+ Fix any detachment in dropdowns, uploaders, message display (as per your notes/screenshots).
+
+ Integration test: send prompt, see streaming response, show agent steps/activities.
+
+ Add loading/error states for slow/failed responses.
+
+7. Admin/Debug/Diagnostics
+ Expose agent status and orchestration logs in the admin dashboard (ModelConfigPanel, AgentOrchestrationDashboard).
+
+ Implement health checks for:
+
+ All model providers (returns valid, up/down, quota info).
+
+ Memory and database connection.
+
+ SSE endpoint.
+
+ “Replay” failed agent runs with the same input (for debugging).
+
+8. Testing, Monitoring, and Deployment
+ Achieve >90% test coverage in backend agent logic and orchestration.
+
+ Ensure all critical workflows are covered in Playwright E2E tests.
+
+ Setup error monitoring (Sentry or similar) for backend exceptions and streaming failures.
+
+ Test Docker and Railway deployment scripts (all .sh and Dockerfiles).
+
+ Deploy to Railway staging, run all e2e tests.
+
+ Validate logs, error handling, and service restarts.
+
+ Prepare production configs for all required environment variables (cross-check with .env.example and docs).
+
+9. Documentation & Hand-off
+ For each major backend module, update markdown in backend/docs/ (especially agentic.md, flow.md, usersjourneys.md).
+
+ Document every agent type, their flow, and example input/output.
+
+ Add a “Debugging Agentic Failures” guide (common root causes, e.g., failed orchestration, memory not persisting, model errors).
+
+CRITICAL: Showstoppers
+If any of these fail, the agentic system won’t work:
+
+Memory not persisting across agent steps or user sessions.
+
+Model APIs returning errors/silent failures (quota, 4xx, 5xx).
+
+Frontend not receiving streaming output or out-of-sync with backend.
+
+Orchestration loop breaks after agent fail (no retries, no failover).
+
+Database or Redis disconnects not gracefully handled.
+
+Test each of these as its own dedicated “failure mode” scenario.
+
+How to track progress?
+Make every TODO its own ticket/task in your tracker.
+
+Require a demo or test for every critical user journey (“from upload to agent swarm output in UI”).
+
+No ticket closed until “works end-to-end, robust to errors, and recovers gracefully.”

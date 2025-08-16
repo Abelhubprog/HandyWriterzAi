@@ -18,7 +18,7 @@ from .gateway import UnifiedLLMGateway, LLMRequest, get_llm_gateway
 from .model_selector import ModelSelector, SelectionContext, SelectionStrategy, get_model_selector
 from .model_policy import get_model_policy_registry
 from ..services.budget import CostLevel
-from ..config.settings import get_settings
+from ..config import get_settings
 
 
 logger = logging.getLogger(__name__)

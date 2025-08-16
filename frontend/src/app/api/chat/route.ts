@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+// Resolve backend URL robustly from env, with sensible fallbacks.
+// Prefer server-side BACKEND_URL, then public vars, then localhost.
+const BACKEND_URL =
+  process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8000';
 
 export async function POST(request: Request) {
   try {
@@ -39,13 +46,18 @@ export async function POST(request: Request) {
     };
 
     console.log('Sending to backend:', backendPayload);
+    console.log('Resolved BACKEND_URL:', BACKEND_URL);
 
     // Forward request to backend chat service
+    const authHeader = request.headers.get('authorization') || undefined;
     const backendResponse = await fetch(`${BACKEND_URL}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        ...(authHeader ? { 'Authorization': authHeader } : {}),
+        // Lightweight identification for optional auth paths
+        ...(backendPayload?.user_params?.user_id ? { 'X-User-Id': String(backendPayload.user_params.user_id) } : {})
       },
       body: JSON.stringify(backendPayload),
     });

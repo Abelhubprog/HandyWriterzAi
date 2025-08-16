@@ -1,0 +1,227 @@
+analyse deeply the current context window and management, assume a user uploads multiple context files in the chat ui and selected a use case like phd dissertation, and expected fully researched and rewritten write-up is 10000 words, and must be fully cited- we need to create comprehensive prompt for each use case. when the user hit send. explain the flow of this request to the end as you confirm functionalities to support this workflow in the codebase.
+
+Deep analysis of context-window management and end-to-end workflow for a 10,000-word PhD Dissertation with multiple uploaded context files and full citations
+
+Goals
+- Large, research‑heavy use case: “PhD Dissertation”, target ~10,000 words with complete citations.
+- Multiple context files uploaded by the user in the chat UI.
+- We need a comprehensive prompt strategy per use case and a deterministic, resumable workflow with streaming, evidence normalization, and final export.
+
+A) Context window strategy and limits
+
+1) Inputs contributing to prompt context
+- User prompt + selected use case (e.g., phd dissertation)
+- User-uploaded files: PDFs/DOCX/TXT
+- Conversation memory summary (episodic, rolling)
+- Semantic memory (vector retrieval) chunks relevant to the topic
+- Verified scholarly evidence (normalized SearchResult records with doi/url, authors, abstract/snippet, pub_date, credibility)
+
+2) Where this is handled in code
+- Entrypoint: [python.unified_chat_endpoint()](backend/src/main.py:977)
+  - Accepts prompt and user_params (feature‑gated normalization)
+  - Generates trace_id as conversation_id and calls UnifiedProcessor
+- Routing and agent execution: [python.UnifiedProcessor](backend/src/agent/routing/unified_processor.py:1)
+  - Analyzes complexity and routes simple/advanced/hybrid
+  - Publishes coherent SSE events (start/progress/done, error)
+- State for complex writing flows: [python.HandyWriterzState](backend/src/agent/handywriterz_state.py:1)
+  - Tracks messages, user_params, uploaded_docs, research results, verified_sources, drafts, etc.
+- Graph orchestration: [python.handywriterz_graph](backend/src/agent/handywriterz_graph.py:1)
+  - Nodes for research → aggregation → verification → writing → evaluation → formatting
+- Semantic/Evidence paths (feature‑gated):
+  - Normalization adapter: [python.agent/search/adapter.py](backend/src/agent/search/adapter.py:1) producing canonical SearchResult objects
+  - Retrieval hooks: [python.get_vector_storage()](backend/src/main.py:971) + [python.get_embedding_service()](backend/src/main.py:972)
+- SSE streaming: [python.stream_updates()](backend/src/main.py:1356)
+  - Redis pub/sub, ordered frames, connection event, and completion signals
+
+3) Actual token budgeting approach (current + recommended)
+- Current system supports:
+  - Rolling conversation summary and per-node deltas in HandyWriterzState
+  - Retrieval of only top‑K chunks for the current node/prompt
+  - Evidence filtered/deduped; only normalized fields used downstream
+- Recommended additions (documented and partly implemented):
+  - Stable “planner seed” for reproducibility per conversation/use case
+  - Deterministic chunk budget per node:
+    - Planner: small K (3–7) for global outline
+    - Writer: larger K per section with sliding window and overlap
+    - Evaluator: focused K for rubric checks and gap analysis
+  - Evidence gate (EvidenceGuard): require a minimum credibility score and enforce recentness thresholds; promote higher-quality sources if token-bound
+  - Summarization of user uploads with headline vectors stored for re‑ranking; page/section anchors in metadata for citation alignment later
+
+B) Prompting strategy by use case (sketch of comprehensive prompts)
+
+We construct a layered prompt pack per use case. For “PhD Dissertation” (10,000 words, fully cited):
+
+1) Planner/system prompt
+- Purpose: Create a chapterized outline with sections, target word counts, citation strategy, methodology framing, and evaluation criteria.
+- Inputs:
+  - User_params normalized (writeupType=“phd_dissertation”, referenceStyle=[APA/Harvard], word_target=10000, academic_level=“phd”)
+  - Conversation summary
+  - Highest-signal chunks extracted from uploads (K small)
+  - Any initial verified sources (top credibility, diverse publication years)
+- Constraints:
+  - Output an outline with chapter/section bullets and target words per section summing ~10k
+  - Define evidence plan per section (min X primary, Y secondary sources)
+  - Define methodology chapter expectations and data sources
+- Output:
+  - Structured JSON or deterministic markdown outline with section keys for subsequent nodes
+
+2) Researcher prompts (per section)
+- Purpose: Query formulation and source gathering; produce normalized evidence.
+- Inputs:
+  - The outline’s current section goal, research questions, and key terms
+  - Semantic retrieval seeds from user uploads
+  - External search provider queries
+- Constraints:
+  - Return normalized SearchResult[] with title, url, doi, authors, abstract/snippet, pub_date, source_type, citation_count, credibility, relevance
+  - Deduplicate by DOI/URL; ensure at least N highly credible sources per section
+  - Extract candidate quotes and page ranges only if anchors exist; do not hallucinate
+- Output:
+  - Section evidence pack with short rationales per source and how it supports the section
+
+3) Aggregator/Verifier prompts
+- Purpose: Consolidate multi-provider results, verify credibility/recency, eliminate conflicts.
+- Inputs:
+  - Candidate evidence from researcher node(s)
+  - Crossref enrichment if needed
+- Constraints:
+  - Drop low-credibility sources; flag conflicts; ensure diversity of journals/publishers
+- Output:
+  - Verified_sources list with rationale; structured for the writer node
+
+4) Writer prompts (per section, iterative)
+- Purpose: Draft text for each section meeting word targets, voice/tone, and citation style; weave evidence.
+- Inputs:
+  - Section outline slice with target word count
+  - Verified_sources and snippets/abstracts
+  - Top‑K retrieved chunks from uploads relevant to this section
+  - Style/constraints from user_params (tone, formality, citation style, regional spelling)
+- Constraints:
+  - No plagiarism; all claims backed with inline citations
+  - Insert citation markers in consistent style (e.g., [Author, Year] or (Author, Year))
+  - Avoid exceeding token limits: write in passes per subsection if needed
+- Output:
+  - Section draft with inline citations and callouts for figures/tables if relevant
+
+5) Evaluator prompts
+- Purpose: Check coherence, structure, coverage vs. the outline, and citation sufficiency
+- Inputs:
+  - Current section draft, outline, verified_sources
+- Constraints:
+  - Provide gap analysis; suggest where more evidence is needed
+- Output:
+  - Edit recommendations; a score; optional micro‑revisions
+
+6) Formatter/Citation builder prompts
+- Purpose: Assemble full dissertation; produce bibliography/reference list in the chosen style
+- Inputs:
+  - Final merged draft
+  - Verified_sources metadata
+- Constraints:
+  - Consistent style (Harvard/APA/MLA); no missing fields
+- Output:
+  - Final formatted content and structured reference list; export to docx/txt/pdf
+
+C) End‑to‑end flow when the user hits Send
+
+1) Frontend
+- UI sends POST /api/chat with:
+  - prompt: “Please produce a 10,000 word PhD dissertation on …”
+  - user_params: { writeupType: "phd_dissertation", word_target: 10000, referenceStyle: "harvard", academicLevel: "phd", ... }
+  - file_ids or the UI already uploaded files via /api/upload (ensure those are associated in backend)
+- Backend returns trace_id (conversation_id)
+
+2) Frontend subscribes to SSE
+- EventSource connects to /api/stream/{trace_id}
+- Receives: workflow_start → workflow_progress frames per node → workflow_complete
+
+3) Backend Unified routing
+- [python.unified_chat_endpoint()](backend/src/main.py:977) normalizes user_params (if flag on) and calls UnifiedProcessor.process_message
+- ComplexityAnalyzer classifies this as advanced (long-form academic)
+- UnifiedProcessor initializes HandyWriterzState with:
+  - messages, normalized user_params, uploaded_files metadata, placeholders for research and drafts
+
+4) Graph execution (LangGraph)
+- Planner node produces the outline and section plan (emit SSE: node_start/node_end with outline preview)
+- For each section:
+  - Researcher node(s) perform semantic retrieval (vector store) + external search
+  - Adapter normalizes SearchResult[]
+  - Aggregator/Verifier canonicalize/dedupe and enforce credibility thresholds
+  - Writer node drafts the section in passes if token‑bound
+  - Evaluator suggests improvements; writer revises where necessary
+  - Progress events streamed after each major step with elapsed time and chunk count
+- Token management during this execution:
+  - Each step uses a bounded prompt context:
+    - Rolling conversation summary rather than full history
+    - Just‑in‑time top‑K chunks for the current section
+    - Verified_sources limited to top N and summarized to fit token budget
+  - For 10k words, the system runs multiple passes across sections; the orchestrator stitches outputs to avoid prompting with the entire draft at once
+
+5) Citations and bibliography
+- Formatter node compiles a references list by mapping Verified_sources → bibliography entries
+- Inline citation markers are harmonized to the selected style
+- Final merged content is produced; document is persisted via DocumentRepository with export options
+
+6) Streaming completion + downloads
+- SSE emits workflow_complete with duration and chunks_processed
+- Client calls:
+  - GET /api/download/{conversation_id}/docx to fetch the Word document
+  - or /api/download/{conversation_id}/txt
+  - or /api/download/{conversation_id}/lo_report (if learning outcomes were requested)
+- Conversation status available at GET /api/conversation/{conversation_id} for progress bars
+
+D) Functionalities confirmed in the codebase supporting this workflow
+
+- Routing and streaming:
+  - Unified routing with SSE frames: [python.unified_chat_endpoint()](backend/src/main.py:977), [python.stream_updates()](backend/src/main.py:1356)
+  - Redis pub/sub for real-time events
+- State and orchestration:
+  - HandyWriterzState fields for research, verified_sources, drafts, formatting hooks: [python.HandyWriterzState](backend/src/agent/handywriterz_state.py:1)
+  - Orchestrated multi-node flow via graph: [python.handywriterz_graph](backend/src/agent/handywriterz_graph.py:1)
+- Evidence handling:
+  - Normalization adapter for search results: [python.agent/search/adapter.py](backend/src/agent/search/adapter.py:1)
+  - Suggested EvidenceGuard and credibility thresholds (documented as part of feature-gated enhancements)
+- Prompt assembly pattern:
+  - Node‑level construction using only the relevant slices of outline, verified_sources, and top‑K chunks (pattern present in graph and recommended enrichment)
+- Exports and downloads:
+  - /api/download endpoints to generate docx/txt and ZIP bundles: [python.download_document()](backend/src/main.py:1488), [python.download_all_formats()](backend/src/main.py:2021)
+- Conversation status:
+  - GET /api/conversation/{conversation_id} returns status/progress and timestamps: [python.get_conversation_status()](backend/src/main.py:1423)
+- Health, status and feature flags:
+  - /health and /api/status reflect Redis/DB/model registry: [python.unified_system_status()](backend/src/main.py:376)
+
+E) Gaps and enhancements to finalize for this specific 10k-word dissertation flow
+
+- Prompt packs
+  - Add configurable prompt templates per use case (phd_dissertation, thesis, report, literature_review, etc.) persisted in a small registry or config file and injected at node creation.
+  - Include seed and style controls for determinism; codify section‑level word budgets.
+- EvidenceGuard enforcement
+  - Enforce minimum credibility thresholds and require per-section minimum verified sources; fail section draft if evidence is insufficient, prompting re‑search.
+- Chunk pipeline
+  - Summarize user uploads on ingestion; persist chunk→section mapping hints to bias retrieval per section and reduce token usage.
+- Citation style controller
+  - Centralize inline marker format and bibliography generation; ensure consistent final formatting with edge cases (multiple authors, et al., DOIs, URLs, short titles).
+- Long‑form stitching
+  - Ensure dynamic sections are merged in order; add “validator” pass to catch duplication or section drift when assembling the final document.
+
+F) Example skeleton of a comprehensive prompt set (abbreviated)
+
+- Planner (system):
+  “You are an academic planning assistant. Construct a complete PhD dissertation outline up to 10,000 words, with chapters, sections, and word targets; include methodology framing and an evidence plan. Style: {referenceStyle}, Level: {academicLevel}. Inputs: {conversation_summary}, {upload_key_points}, {seed_topics}. Output JSON with keys: outline, per_section_targets, research_questions, evaluation_criteria.”
+
+- Researcher (per section):
+  “For section {section_title} (target {word_target}), identify credible sources (peer‑reviewed, books, meta-analyses). Combine user uploads and external search. Return normalized SearchResult[] with: title, url, doi, authors, abstract, pub_date, source_type, citation_count, credibility, relevance. Explain each source’s contribution in one line.”
+
+- Aggregator/Verifier:
+  “Given candidate sources, deduplicate by DOI/URL, remove low‑credibility, balance years, ensure diversity. Produce verified_sources[] meeting min {N} for this section, include rationales and key quotes with page anchors if available.”
+
+- Writer (per section):
+  “Write {word_target} words in academic tone for section {section_title}, weaving verified_sources. Insert inline citations in {referenceStyle}. Avoid plagiarism. Follow this micro-structure: {subsections}. Ensure coherence and transitions.”
+
+- Evaluator:
+  “Evaluate the section draft against outline goals, coherence, coverage, and citation sufficiency. Suggest improvements, flag missing evidence, and produce a short revised paragraph where critical.”
+
+- Formatter:
+  “Produce a final merged document with consistent inline citations and a bibliography in {referenceStyle}. Validate contributor names, years, titles, DOIs/URLs. Return final content and a structured reference list.”
+
+Conclusion
+The current backend and orchestration are capable of supporting the 10,000‑word, fully cited PhD dissertation flow with multiple uploaded context files. The architecture already manages context economically by: rolling conversation summaries, just‑in‑time retrieval of top‑K chunks, evidence normalization with dedupe, and streaming across nodes. To fully realize the use-case, formalize the per-use‑case prompt pack, enable strict EvidenceGuard thresholds, and standardize citation formatting and section‑level budgets. The end‑to‑end user journey is: POST /api/chat → SSE streaming of planner → research → verification → writing → evaluation → formatter → downloads via /api/download/{conversation_id}/docx|txt|zip, with /api/conversation/{conversation_id} for status and timestamps.

@@ -77,7 +77,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Production command
-CMD ["uvicorn", "handywriterz_server:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--log-level", "info"]
+# Bind to PORT if provided (Railway/Heroku), else default to 8000
+CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WORKERS:-2} --log-level info"]
 
 # Stage 3: Development Runtime (optional)
 FROM production as development

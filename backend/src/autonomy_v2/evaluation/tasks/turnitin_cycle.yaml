@@ -1,0 +1,4 @@
+type: turnitin_cycle
+goal: "Draft an essay with citations"
+target_similarity: 0.15
+observed_similarity: 0.08

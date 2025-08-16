@@ -8,7 +8,29 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 from enum import Enum
-from pgvector.sqlalchemy import Vector
+# Use pgvector if available; otherwise, provide a minimal fallback type
+try:
+    from pgvector.sqlalchemy import Vector  # type: ignore
+except Exception:  # pragma: no cover
+    from sqlalchemy.types import TypeDecorator, ARRAY, Float
+
+    class Vector(TypeDecorator):  # type: ignore
+        """Fallback Vector type using ARRAY(Float) when pgvector is unavailable.
+
+        This enables importing models and running non-vector tests on environments
+        without pgvector (e.g., Python 3.12 CI). Vector operations like
+        cosine_distance are not supported in this fallback and code should guard
+        usage accordingly.
+        """
+
+        impl = ARRAY(Float)
+        cache_ok = True
+
+        def process_bind_param(self, value, dialect):
+            return value
+
+        def process_result_value(self, value, dialect):
+            return value
 
 
 Base = declarative_base()
@@ -352,6 +374,36 @@ class UserFingerprint(Base):
             "confidence_score": self.confidence_score,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class TimelineEventModel(Base):
+    """Persisted timeline events for research streaming and audit."""
+    __tablename__ = "timeline_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    conversation_id = Column(UUID(as_uuid=True), index=True, nullable=False)
+    type = Column(String(100), nullable=False)
+    agent = Column(String(100), nullable=True)
+    node = Column(String(100), nullable=True)
+    ts = Column(DateTime, nullable=False, default=datetime.utcnow)
+    payload = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index('idx_timeline_conv_ts', 'conversation_id', 'ts'),
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": str(self.id),
+            "conversation_id": str(self.conversation_id),
+            "type": self.type,
+            "agent": self.agent,
+            "node": self.node,
+            "ts": self.ts.isoformat() if self.ts else None,
+            "payload": self.payload,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
 

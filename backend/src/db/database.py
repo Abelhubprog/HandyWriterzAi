@@ -22,7 +22,8 @@ class DatabaseManager:
     def __init__(self):
         self.database_url = os.getenv("DATABASE_URL")
         if not self.database_url:
-            raise ValueError("DATABASE_URL environment variable is not set")
+            # Strict: require an explicit DATABASE_URL (Railway/managed Postgres recommended)
+            raise ValueError("DATABASE_URL environment variable is required and must point to your managed Postgres instance")
 
         # Handle different database URL formats
         if self.database_url.startswith("postgres://"):
@@ -34,17 +35,25 @@ class DatabaseManager:
 
         # Create asynchronous engine for async operations (only for PostgreSQL)
         if "sqlite" not in self.database_url:
-            async_url = self.database_url.replace("postgresql://", "postgresql+asyncpg://")
-            self.async_engine = create_async_engine(async_url, echo=False)
-            self.AsyncSessionLocal = async_sessionmaker(
-                self.async_engine, class_=AsyncSession, expire_on_commit=False
-            )
+            try:
+                async_url = self.database_url.replace("postgresql://", "postgresql+asyncpg://")
+                # Apply connect timeout if not present
+                if "connect_timeout=" not in async_url:
+                    sep = "&" if "?" in async_url else "?"
+                    async_url = f"{async_url}{sep}connect_timeout={os.getenv('DB_CONNECT_TIMEOUT', '3')}"
+                self.async_engine = create_async_engine(async_url, echo=False)
+                self.AsyncSessionLocal = async_sessionmaker(
+                    self.async_engine, class_=AsyncSession, expire_on_commit=False
+                )
+            except Exception:
+                self.async_engine = None
+                self.AsyncSessionLocal = None
         else:
             # SQLite doesn't support async operations well
             self.async_engine = None
             self.AsyncSessionLocal = None
 
-        # Initialize database
+        # Initialize database (fail fast on errors)
         self._init_database()
 
     def _create_engine(self) -> Engine:
@@ -66,6 +75,10 @@ class DatabaseManager:
                 "pool_recycle": 3600,  # Recycle connections every hour
                 "pool_size": 10,
                 "max_overflow": 20,
+                "connect_args": {
+                    # Fail fast if DB is not reachable in dev
+                    "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "3"))
+                },
             })
 
         return create_engine(self.database_url, **engine_kwargs)
@@ -293,14 +306,24 @@ class ConversationRepository:
                         setattr(conversation, key, value)
                 logger.debug(f"Updated conversation state: {conversation_id}")
 
-    def get_user_conversations(self, user_id: str, limit: int = 50):
-        """Get user's conversations."""
+    def get_user_conversations(self, user_id: str, limit: int = 50, offset: int = 0, sort_by: str = "created_at", sort_dir: str = "desc"):
+        """Get user's conversations with pagination and sorting."""
         with self.db_manager.get_db_context() as db:
-            return db.query(Conversation)\
-                    .filter(Conversation.user_id == user_id)\
-                    .order_by(Conversation.created_at.desc())\
-                    .limit(limit)\
-                    .all()
+            query = db.query(Conversation).filter(Conversation.user_id == user_id)
+
+            # Sorting
+            sort_attr = getattr(Conversation, sort_by, Conversation.created_at)
+            if sort_dir.lower() == "asc":
+                query = query.order_by(sort_attr.asc())
+            else:
+                query = query.order_by(sort_attr.desc())
+
+            return query.offset(offset).limit(limit).all()
+
+    def count_user_conversations(self, user_id: str) -> int:
+        """Count total conversations for a user."""
+        with self.db_manager.get_db_context() as db:
+            return db.query(Conversation).filter(Conversation.user_id == user_id).count()
 
 
 class DocumentRepository:

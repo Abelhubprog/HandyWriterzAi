@@ -202,6 +202,15 @@ class HandyWriterzSettings(BaseSettings):
     test_mode: bool = Field(default=False, env="TEST_MODE")
     mock_external_apis: bool = Field(default=False, env="MOCK_EXTERNAL_APIS")
     skip_ai_calls: bool = Field(default=False, env="SKIP_AI_CALLS")
+
+    # ==========================================
+    # AUTONOMY V2 FEATURE FLAGS & DEFAULTS
+    # ==========================================
+    enable_autonomy_v2: bool = Field(default=False, env="ENABLE_AUTONOMY_V2")
+    v2_budget_tokens: int = Field(default=200_000, env="V2_BUDGET_TOKENS")
+    v2_budget_seconds: int = Field(default=9, env="V2_BUDGET_SECONDS")
+    v2_job_concurrency_per_user: int = Field(default=2, env="V2_JOB_CONCURRENCY_PER_USER")
+    turnitin_target_default: float = Field(default=0.15, env="TURNITIN_TARGET_DEFAULT")
     
     # Development tools
     enable_debug_toolbar: bool = Field(default=False, env="ENABLE_DEBUG_TOOLBAR")

@@ -51,14 +51,14 @@ railway add postgresql
 railway add redis
 ```
 
-### 4. Enable pgvector Extension
+### 4. Enable pgvector Extension (Required)
 
 ```bash
 # Wait for PostgreSQL to be ready (2-3 minutes)
 railway run psql $DATABASE_URL -c "CREATE EXTENSION IF NOT EXISTS vector;"
 ```
 
-### 5. Set Environment Variables
+### 5. Set Environment Variables (Required)
 
 Use the automated script:
 ```bash
@@ -81,10 +81,12 @@ railway variables set COINBASE_API_KEY="your_coinbase_key"
 railway variables set DYNAMIC_ENV_ID="your_dynamic_env_id"
 railway variables set DYNAMIC_PUBLIC_KEY="your_dynamic_public_key"
 
-# Application Configuration
+## Backend Configuration (Required)
 railway variables set ENVIRONMENT="production"
 railway variables set NODE_ENV="production"
 railway variables set LOG_LEVEL="INFO"
+railway variables set DATABASE_URL="$DATABASE_URL"
+railway variables set REDIS_URL="$REDIS_URL"
 
 # Generate secure JWT secret
 railway variables set JWT_SECRET_KEY="$(openssl rand -base64 32)"
@@ -106,7 +108,7 @@ This will:
 - Deploy backend and frontend services
 - Start the application with health checks
 
-### 7. Run Database Migrations
+### 7. Run Database Migrations (Optional)
 
 ```bash
 railway run bash -c "cd backend && python -m alembic upgrade head"
@@ -120,7 +122,7 @@ railway domain
 
 This creates a public URL like: `https://handywriterz-ai-production.up.railway.app`
 
-### 9. Update URL Configuration
+### 9. Update URL Configuration (Frontend)
 
 ```bash
 DOMAIN=$(railway domain show)
@@ -198,7 +200,7 @@ railway scale backend replicas=2
 ### Health Monitoring
 
 Your application includes these health endpoints:
-- **Health Check**: `/health` - Basic service status
+- **Health Check**: `/health/ready` - Redis + DB readiness
 - **API Documentation**: `/docs` - Interactive API docs
 - **Metrics**: `/metrics` - Performance metrics (if configured)
 

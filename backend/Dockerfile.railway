@@ -28,7 +28,8 @@ WORKDIR /app
 
 # Copy requirements files
 COPY backend/requirements.txt .
-COPY backend/requirements-cpu.txt .
+# Match actual filename in the repo (underscore, not dash)
+COPY backend/requirements_cpu.txt ./requirements_cpu.txt
 
 # Install Python dependencies with Railway optimizations
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \

@@ -1,0 +1,384 @@
+
+
+
+
+Model-to-Agent-to-Usage mapping across the backend (current code)
+
+Executive summary
+- There are three parallel “model routing” layers in the codebase:
+  1) ProviderFactory layer (src.models.factory) that instantiates concrete provider SDK wrappers (Gemini/OpenAI/Anthropic/OpenRouter/Perplexity) and selects a default provider per ModelRole. This is used by legacy role/provider endpoints and by the newer ChatOrchestrator.
+  2) Advanced LangGraph workflows (handywriterz_graph) that call search/writer/evaluator/formatter/turnitin agents; these internal agents pick models/providers per their own logic and config (e.g., get_model_config("search")) and by using provider-specific tools/SDKs.
+  3) Simple Gemini graph (agent/graph.py) that is always Gemini-only.
+
+- Unified routing path for /api/chat:
+  - UnifiedProcessor routes each request to simple, advanced, or hybrid:
+    - simple: uses the Gemini graph exclusively (Gemini 2.x/1.5 via google clients).
+    - advanced: runs HandyWriterz LangGraph orchestrator; inside, agents can call various providers depending on agent type: search (Perplexity online sonar, Gemini search, Claude search, OpenAI search, O3 search), writing/evaluation (likely Anthropic/OpenAI/OpenRouter by each node’s implementation), formatter and Turnitin agents (do not directly use LLM models or may pick internal ones).
+    - hybrid: runs both simple and advanced in parallel and merges results.
+
+Where models are defined and selected
+
+1) Provider layer (multi-provider chat facade)
+- Entry points:
+  - /api/chat/provider/{provider}: direct provider call. Chooses the given provider and passes message to its BaseProvider.chat().
+  - /api/chat/role/{role}: role-based selection, uses ProviderFactory role mapping to pick provider by ModelRole, then calls provider.get_default_model(role) and provider.chat().
+
+- Concrete provider wrappers:
+  - OpenAIProvider [src.models.openai.OpenAIProvider.__init__()](backend/src/models/openai.py:15) uses openai AsyncOpenAI, default models include gpt-4o/gpt-4o-mini/gpt-4(-turbo)/gpt-3.5-turbo; get_default_model maps ModelRole to best OpenAI model [src.models.openai.OpenAIProvider.get_default_model()](backend/src/models/openai.py:33).
+  - AnthropicProvider [src.models.anthropic.AnthropicProvider.__init__()](backend/src/models/anthropic.py:15) uses anthropic AsyncAnthropic; defaults favor Claude 3.5 Sonnet/Haiku per role [src.models.anthropic.AnthropicProvider.get_default_model()](backend/src/models/anthropic.py:33).
+  - GeminiProvider [src.models.gemini.GeminiProvider.__init__()](backend/src/models/gemini.py:16) uses google.generativeai; defaults pick gemini-1.5-pro/1.5-flash/2.0-flash-exp by role [src.models.gemini.GeminiProvider.get_default_model()](backend/src/models/gemini.py:41).
+  - OpenRouterProvider [src.models.openrouter.OpenRouterProvider.__init__()](backend/src/models/openrouter.py:16) uses OpenAI-compatible AsyncOpenAI to OpenRouter; defaults map roles to e.g. anthropic/claude-3.5-sonnet, openai/gpt-4o-mini, qwen/qwen-2.5-72b-instruct, moonshot-v1-8k [src.models.openrouter.OpenRouterProvider.get_default_model()](backend/src/models/openrouter.py:54).
+  - PerplexityProvider [src.models.perplexity.PerplexityProvider.__init__()](backend/src/models/perplexity.py:16) uses AsyncOpenAI against Perplexity endpoint; defaults map research-oriented roles to sonar-online models [src.models.perplexity.PerplexityProvider.get_default_model()](backend/src/models/perplexity.py:39).
+
+- Factory role mapping logic:
+  - ProviderFactory initializes the providers based on available API keys [src.models.factory.ProviderFactory._initialize_providers()](backend/src/models/factory.py:44).
+  - It sets a role->provider mapping prioritizing provider strengths [src.models.factory.ProviderFactory._setup_default_role_mappings()](backend/src/models/factory.py:89).
+  - For example:
+    - ModelRole.RESEARCHER: prefers perplexity, then openrouter, gemini, openai [src.models.factory.ProviderFactory._setup_default_role_mappings()](backend/src/models/factory.py:101)
+    - ModelRole.WRITER/JUDGE/LAWYER: prefers anthropic, then openrouter/openai/gemini [src.models.factory.ProviderFactory._setup_default_role_mappings()](backend/src/models/factory.py:100)
+    - ModelRole.GENERAL: prefers openrouter, then anthropic/gemini/openai [src.models.factory.ProviderFactory._setup_default_role_mappings()](backend/src/models/factory.py:107)
+  - When the endpoint asks for a role, factory picks first available provider in the role priority list and then the provider decides the model via get_default_model(role).
+
+- Orchestrator that uses the factory:
+  - ChatOrchestrator [src.models.chat_orchestrator_core.ChatOrchestrator.chat()](backend/src/models/chat_orchestrator_core.py:66) resolves a task from input role/task, selects a CandidateModel via policy_registry, then calls get_provider(provider_name) from the factory and provider.chat() with model_hint if provided. It blocks Gemini for non-GENERAL tasks [src.models.chat_orchestrator_core.ChatOrchestrator._select_candidate()](backend/src/models/chat_orchestrator_core.py:34).
+  - Net effect: when used, this path picks provider+model combining task policy and the factory’s providers.
+
+Where the chat endpoints route models
+
+2) UnifiedProcessor routing for /api/chat
+- Top-level routing:
+  - /api/chat deserializes ChatRequest, optionally normalizes params, then calls UnifiedProcessor.process_message() [src.main.unified_chat_endpoint()](backend/src/main.py:1026).
+  - UnifiedProcessor analyzes the request and routes to simple / advanced / hybrid [src.agent.routing.unified_processor.UnifiedProcessor.process_message()](backend/src/agent/routing/unified_processor.py:100) and [src.agent.routing.unified_processor.UnifiedProcessor._process_with_context()](backend/src/agent/routing/unified_processor.py:125).
+
+- Simple path models:
+  - _process_simple uses the “simple Gemini graph” [src.agent.routing.unified_processor.UnifiedProcessor._process_simple()](backend/src/agent/routing/unified_processor.py:326), which imports gemini_graph from src.agent.simple (compatibility shim to agent/graph).
+  - The agent/graph stack requires GEMINI_API_KEY and uses Google GenAI and LangChain GoogleGenAI wrappers:
+    - Google Generative AI client for search tool-calls [src.agent.graph.genai_client = Client(...)](backend/src/agent/graph.py:45)
+    - ChatGoogleGenerativeAI for query/reflection/answer steps; default models come from Configuration/query_generator_model etc., which are set to Gemini strings (e.g., gemini 2.0 flash) in that module’s config [src.agent.graph.generate_query()](backend/src/agent/graph.py:71), [src.agent.graph.reflection()](backend/src/agent/graph.py:173), [src.agent.graph.finalize_answer()](backend/src/agent/graph.py:252).
+  - Summary: In the simple path, all LLM invocations are Gemini family models.
+
+- Advanced path models (HandyWriterz LangGraph):
+  - UnifiedProcessor _process_advanced builds a HandyWriterzState and runs handywriterz_graph.ainvoke() [src.agent.routing.unified_processor.UnifiedProcessor._process_advanced()](backend/src/agent/routing/unified_processor.py:376).
+  - The main graph is in handywriterz_graph; it orchestrates many specialized agents:
+    - Production-ready AI search agents: GeminiSearchAgent, PerplexitySearchAgent, O3SearchAgent, ClaudeSearchAgent, OpenAISearchAgent, GitHubSearchAgent [src.agent.handywriterz_graph imports](backend/src/agent/handywriterz_graph.py:42).
+    - Enabled search agents are decided by get_model_config("search") mapping; each agent internally calls its provider SDK/model. For example:
+      - PerplexitySearchAgent likely uses Perplexity online sonar models (llama-3.1-sonar-*-online) to perform web-backed search.
+      - GeminiSearchAgent likely uses Gemini via Google GenAI or LangChain provider.
+      - ClaudeSearchAgent uses Anthropic Claude.
+      - OpenAISearchAgent uses OpenAI.
+      - O3SearchAgent references OpenAI o3-like reasoning models.
+    - Writing/evaluator/formatter/turnitin agents:
+      - WriterNode, EvaluatorNode, Formatter, Turnitin nodes are orchestrated through their node classes. Their internal LLM choices typically map to Anthropic/OpenAI/OpenRouter/Gemini depending on each node’s configured defaults. EvaluatorNode often favors “judge” style models (Claude/OpenAI). Formatter may choose concise/friendly models. Turnitin agent coordinates checks; it may not call LLMs directly for the scan but can use LLMs to summarize/evaluate similarity feedback.
+    - The flow runs research → verification/filtering → writing → evaluation → Turnitin → formatting → memory writing. At each substep, the specific agent chooses the best model for its task (either embedded policy or via model_config).
+
+  - Practical effect of advanced path:
+    - Research agents will prefer Perplexity online sonar for web-grounded research; Gemini or Claude/OpenAI may also run in parallel depending on config. This makes multi-provider usage common in a single advanced request.
+    - Writing + evaluation likely favor Anthropic (Claude 3.5 Sonnet) or OpenAI GPT-4o family for higher quality composition and judging, with OpenRouter access as needed.
+    - Formatting is lighter-weight LLM usage; can remain with the writing/evaluator family or a smaller/faster model.
+
+- Hybrid path models:
+  - Runs both simple Gemini path and the advanced orchestrator concurrently [src.agent.routing.unified_processor.UnifiedProcessor._process_hybrid()](backend/src/agent/routing/unified_processor.py:466). So you will see Gemini plus research/Claude/OpenAI/Perplexity depending on tasks.
+
+Additional model registries, configs, and guardrails
+
+3) ModelRegistry and budget layer
+- ModelRegistry loads model_config.yaml and price_table.json and exposes logical IDs → provider/model IDs [src.models.registry.ModelRegistry.load()](backend/src/models/registry.py:39). It supports mapping such as o3-reasoner→openai:o1-preview, sonar-deep→perplexity:sonar-large-online etc. This is used for validation/costing and can inform selection in policy code, though the current unified processor path doesn’t call registry directly.
+- BudgetGuard estimates tokens/cost and can block requests; it doesn’t choose models but sets cost_level MEDIUM by default in UnifiedProcessor [src.agent.routing.unified_processor.CostLevel](backend/src/agent/routing/unified_processor.py:59) and [src.agent.routing.unified_processor.guard_request()](backend/src/agent/routing/unified_processor.py:160).
+
+4) AdvancedLLMService (not wired into /api/chat path)
+- AdvancedLLMService provides internal pooling/circuit-breaker/rate-limiting for several models (Gemini 1.5, GPT-4o/mini, Groq Mixtral) [src.services.advanced_llm_service.AdvancedLLMService._initialize_models()](backend/src/services/advanced_llm_service.py:108). It’s ready to be leveraged but the unified chat flow does not currently pipe requests through it. Some agents/nodes could migrate to using this service for centralized metrics/selection later.
+
+End-to-end: which agent uses which model and why
+
+- Simple Gemini agent (when routed simple or in hybrid):
+  - Uses Gemini 2.0 Flash / 1.5 family for:
+    - Generating and reflecting search queries
+    - Building final answer with inlined citations
+    - Reason: low latency, Google Search tool integration, tight coupling in the simple research graph
+
+- Advanced orchestration (when routed advanced or in hybrid):
+  - Early phase: Research/search agents
+    - Perplexity sonar-online models for live web search and evidence aggregation (preferred for research depth).
+    - Gemini Search Agent to leverage Google search/grounding.
+    - Claude/OpenAI search variants are included to diversify sources and reasoning.
+    - Why: Each provider is strong at specific tasks: Perplexity for web-grounded search with good citations; Gemini for search tools; Claude/OpenAI for reasoning during filtering/synthesis.
+
+  - Mid phase: Source filtering, synthesis, planning
+    - Likely uses a mix of models; choices are embedded in each node. Claude Sonnet and GPT-4o are commonly strong for synthesis and structured planning; Gemini 1.5 Pro can also be used for long-context planning.
+
+  - Writing agent:
+    - Prefers high-quality writer models (Claude 3.5 Sonnet; GPT-4o family; OpenRouter access to large instruction-tuned models). These deliver coherent, academic tone outputs at length.
+
+  - Evaluator agent (judge):
+    - Prefers “judge” style top-tier reasoning models (Claude Sonnet / GPT-4 class) to score completeness, structure, and correctness. This reflects ProviderFactory role mappings for JUDGE/REVIEWER that prefer Anthropic/OpenRouter/OpenAI.
+
+  - Turnitin agent:
+    - Orchestrates plagiarism checks and loops back to writer if needed. May not call an LLM directly for the scan; but if it needs remediation text or summary, it will call the same writer/evaluator models.
+
+  - Formatter:
+    - Uses a lighter pass or any fast high-quality model to produce the final formatted document. Often GPT-4o-mini, Gemini-Flash, or similar could be appropriate; specifics depend on the node implementation.
+
+- Role/provider endpoints:
+  - /api/chat/role/{role} uses ProviderFactory role-mapping, so:
+    - researcher: prefers perplexity sonar online
+    - writer/judge/lawyer/reviewer: prefers anthropic claude-3.5 sonnet
+    - summarizer: prefers openai gpt-4o-mini
+    - general: prefers openrouter’s moonshot-v1-8k by default
+  - /api/chat/provider/{provider} locks to the requested provider and optionally an explicit model.
+
+Routing rules and constraints that affect model choice
+
+- UnifiedProcessor SystemRouter decides “simple/advanced/hybrid” based on request complexity and files. For academic intents or larger scopes, advanced is chosen and that opens up multi-provider usage.
+- ChatOrchestrator forbids Gemini for non-GENERAL tasks; this keeps Gemini limited to general chat unless explicitly hinted.
+- ProviderFactory role-to-provider defaults are set by perceived strengths: Anthropic for deep reasoning/writing, Perplexity for research with web, OpenRouter for diverse model access and reviewers, OpenAI for summarization speed/quality, Gemini for general/simple.
+- ModelRegistry provides price/context windows and aliases; can be enforced via FEATURE_REGISTRY_ENFORCED for stricter consistency. Budget guard estimates cost preflight and can block heavy requests.
+
+Concrete call sites
+
+- Unified chat:
+  - Request enters /api/chat → UnifiedProcessor.process_message()
+  - If simple: calls gemini_graph (Gemini models) [src.agent.routing.unified_processor.UnifiedProcessor._process_simple()](backend/src/agent/routing/unified_processor.py:326)
+  - If advanced: calls handywriterz_graph (multi-agents using Perplexity/Gemini/Anthropic/OpenAI etc.) [src.agent.routing.unified_processor.UnifiedProcessor._process_advanced()](backend/src/agent/routing/unified_processor.py:376)
+  - If hybrid: both paths run in parallel and merge.
+
+- Role/provider explicit paths:
+  - Provider endpoint → ProviderFactory.get_provider(provider) → provider.chat() with model hint if set; model defaults via provider.get_default_model(role) if role path.
+
+Environment variables required to activate models
+- GEMINI_API_KEY for Gemini paths (simple graph requires it and will raise without it) [src.agent.graph](backend/src/agent/graph.py:41)
+- OPENAI_API_KEY for OpenAI usage (role/provider path; some advanced agents).
+- ANTHROPIC_API_KEY for Claude usage.
+- PERPLEXITY_API_KEY for Perplexity sonar research.
+- For OpenRouter, OPENROUTER_API_KEY is expected if you later wire the factory to pass it (factory currently expects "openrouter" key).
+
+Why models are chosen at each step
+- Research depth and citations: Perplexity sonar online is preferred; can combine with Gemini search for Google grounding, improving factuality and source coverage.
+- Reasoning quality and academic tone: Claude 3.5 Sonnet and GPT-4o are favored in writer/evaluator roles due to better long-form coherence and critique/evaluation reliability.
+- Speed vs cost tradeoffs: summarizer/general roles favor smaller/cheaper models like GPT-4o-mini or Gemini-Flash; OpenRouter can give access to fast specialized models (Qwen, GLM, etc.) when available.
+- Task policies (ChatOrchestrator) and role mappings (ProviderFactory) encode these strengths so callers don’t need to micromanage models.
+
+Actionable verification endpoints
+- GET /api/providers/status shows which providers initialized (based on env keys), role mappings, health checks, and provider default models [src.main.get_providers_status()](backend/src/main.py:606).
+- GET /api/status gives routing mode availability and feature flags including params normalization and SSE publisher [src.main.unified_system_status()](backend/src/main.py:422).
+
+Bottom line mapping
+- Simple agent path: Gemini only.
+- Advanced path:
+  - Search agents: Perplexity sonar online (primary), plus Gemini/Claude/OpenAI/O3 agents if enabled by config.
+  - Writer: typically Anthropic Claude 3.5 Sonnet or OpenAI GPT-4o tier; could route via OpenRouter for alternates.
+  - Evaluator (judge/reviewer): Anthropic/OpenAI/OpenRouter as per role strength; Anthropic Sonnet is top pick.
+  - Formatter: lighter model from the same families for speed.
+- Role endpoint:
+  - researcher → perplexity sonar
+  - writer/judge/lawyer/reviewer → anthropic sonnet
+  - summarizer → openai gpt-4o-mini
+  - general → openrouter moonshot-v1-8k (Kimi K2 general)
+
+
+
+
+🎯 Corrected Agent-to-Model Mapping (SOTA Models Only)
+
+  Current SOTA Model Inventory
+
+  Google Models
+
+  - gemini-2.5-pro - Premium reasoning and long-form content
+  - gemini-2.5-flash - High-speed optimized performance
+
+  OpenAI Models
+
+  - chatgpt-o3 - Advanced reasoning flagship
+  - chatgpt-4.1 - Enhanced general intelligence
+  - chatgpt-4o-mini-high - Optimized efficiency with quality
+  - chatgpt-4o - Multimodal general purpose
+
+  Anthropic Models
+
+  - claude-4-sonnet - Advanced reasoning and writing
+  - claude-4-opus - Maximum capability flagship
+
+  Specialized Models
+
+  - deepseek-r1 - Technical and coding specialist
+  - perplexity-deepresearch - Advanced research with live data
+  - qwen-3 - Multilingual and reasoning
+  - glm-4.5 - Chinese-developed general model
+  - kimi-k2 - Long context specialist
+
+  ---
+  🔍 Revised Agent-to-Model Assignments
+
+  1. Core Orchestration Layer
+
+  Master Orchestrator Agent
+
+  - Primary: chatgpt-o3 (Advanced reasoning flagship)
+  - Fallbacks: claude-4-opus, gemini-2.5-pro
+  - Purpose: Strategic workflow intelligence
+  - Why O3: Best reasoning capabilities for complex orchestration
+
+  Enhanced User Intent Agent
+
+  - Primary: claude-4-sonnet (Superior text analysis)
+  - Fallbacks: chatgpt-4.1, gemini-2.5-pro
+  - Purpose: Requirement extraction and analysis
+
+  ---
+  2. Search Agent Swarm
+
+  | Agent             | Primary Model           | Purpose               | Reasoning                      |
+  |-------------------|-------------------------|-----------------------|--------------------------------|
+  | Gemini Search     | gemini-2.5-pro          | Multimodal analysis   | Google's latest multimodal     |
+  | Claude Search     | claude-4-sonnet         | Analytical reasoning  | Superior analysis capabilities |
+  | OpenAI Search     | chatgpt-4.1             | General intelligence  | Enhanced reasoning             |
+  | O3 Search         | chatgpt-o3              | Complex queries       | Advanced reasoning             |
+  | Perplexity Search | perplexity-deepresearch | Real-time research    | Built-in research capabilities |
+  | DeepSeek Search   | deepseek-r1             | Technical content     | Specialized technical model    |
+  | Qwen Search       | qwen-3                  | Multilingual research | Advanced multilingual          |
+  | GLM Search        | glm-4.5                 | Diverse perspectives  | Alternative reasoning approach |
+  | Kimi Search       | kimi-k2                 | Long context analysis | Extended context handling      |
+
+  ---
+  3. Research Swarm Agents (Weighted Consensus)
+
+  | Agent               | Model                   | Weight | Purpose                 |
+  |---------------------|-------------------------|--------|-------------------------|
+  | Primary Researcher  | perplexity-deepresearch | 30%    | Live research synthesis |
+  | Methodology Expert  | chatgpt-o3              | 25%    | Research design         |
+  | Analysis Specialist | claude-4-opus           | 25%    | Deep analytical work    |
+  | Context Specialist  | kimi-k2                 | 20%    | Long document analysis  |
+
+  Consensus: 75% threshold, 85% diversity target
+
+  ---
+  4. Writing Swarm Agents (Weighted Consensus)
+
+  Core Writer Agent
+
+  - Primary: claude-4-opus (Best long-form writing)
+  - Fallbacks: claude-4-sonnet, gemini-2.5-pro
+  - Purpose: Academic content generation
+
+  Writing Enhancement Swarm
+
+  | Agent               | Model           | Weight | Purpose                  |
+  |---------------------|-----------------|--------|--------------------------|
+  | Academic Tone       | claude-4-sonnet | 30%    | Formal academic writing  |
+  | Structure Optimizer | chatgpt-o3      | 25%    | Document organization    |
+  | Clarity Enhancer    | chatgpt-4.1     | 25%    | Readability optimization |
+  | Style Adaptation    | gemini-2.5-pro  | 20%    | Field-specific styling   |
+
+  Consensus: 80% threshold, 75% diversity target
+
+  ---
+  5. Quality Assurance Swarm
+
+  | Agent             | Model          | Weight | Purpose              |
+  |-------------------|----------------|--------|----------------------|
+  | Fact Checker      | chatgpt-o3     | 30%    | Factual verification |
+  | Bias Detector     | claude-4-opus  | 25%    | Bias analysis        |
+  | Logic Validator   | chatgpt-4.1    | 25%    | Argument validation  |
+  | Originality Guard | gemini-2.5-pro | 20%    | Plagiarism detection |
+
+  Consensus: 75% threshold, 80% diversity target
+
+  ---
+  6. Advanced Processing Agents
+
+  Evaluation & Analysis
+
+  - Evaluator Advanced: chatgpt-o3 - Multi-model assessment
+  - Swarm Coordinator: claude-4-opus - Collective intelligence
+  - Intelligence Engine: chatgpt-o3 - Pattern synthesis
+
+  Document Processing
+
+  - Formatter Advanced: claude-4-sonnet - Professional formatting
+  - Citation Master: chatgpt-4.1 - Citation management
+  - Document Optimizer: gemini-2.5-pro - Structure optimization
+
+  Technical Processing
+
+  - Code Analyzer: deepseek-r1 - Technical content analysis
+  - Data Processor: qwen-3 - Multilingual data handling
+  - Context Manager: kimi-k2 - Long context processing
+
+  ---
+  7. Specialized Domain Agents
+
+  Research Support
+
+  - Methodology Writer: chatgpt-o3 - Research methodology
+  - Literature Reviewer: claude-4-opus - Comprehensive analysis
+  - Synthesis Agent: perplexity-deepresearch - Multi-source synthesis
+  - Privacy Manager: claude-4-sonnet - Ethical compliance
+
+  Recovery & Intelligence
+
+  - Fail Handler: chatgpt-o3 - Intelligent recovery
+  - Fallback Controller: chatgpt-4.1 - System resilience
+  - Intent Analyzer: claude-4-sonnet - Advanced parsing
+
+  ---
+  🎯 Optimized Model Selection Strategy
+
+  Maximum Reasoning Tasks → chatgpt-o3
+
+  - Master orchestration
+  - Complex methodology design
+  - Advanced quality evaluation
+  - Intelligent error recovery
+
+  Premium Writing Tasks → claude-4-opus
+
+  - Academic content generation
+  - Deep analytical writing
+  - Complex document synthesis
+
+  Balanced Performance → claude-4-sonnet / chatgpt-4.1
+
+  - Text analysis and formatting
+  - Academic tone optimization
+  - General intelligence tasks
+
+  Specialized Tasks
+
+  - Research: perplexity-deepresearch
+  - Technical: deepseek-r1
+  - Multilingual: qwen-3
+  - Long Context: kimi-k2
+  - Fast Processing: gemini-2.5-flash
+
+  Cost-Performance Balance → gemini-2.5-pro / chatgpt-4o-mini-high
+
+  - High-quality but efficient processing
+  - Fallback operations
+  - Secondary validation
+
+  ---
+  💰 Updated Cost-Performance Tiers
+
+  Premium Tier (Highest Quality)
+
+  - chatgpt-o3: Advanced reasoning flagship
+  - claude-4-opus: Maximum capability
+  - perplexity-deepresearch: Advanced research
+
+  Professional Tier (Balanced)
+
+  - claude-4-sonnet: Professional writing
+  - chatgpt-4.1: Enhanced intelligence
+  - gemini-2.5-pro: Google's premium
+
+  Efficient Tier (Optimized)
+
+  - gemini-2.5-flash: Fast processing
+  - chatgpt-4o-mini-high: Efficient quality
+  - deepseek-r1: Specialized efficiency
+
+  This corrected mapping uses only your current SOTA models (March 2025+) and provides appropriate fallback chains within the same generation of models.
+  
+
+
+This reflects how models are used now in the backend, which agents use what models, at what point, to do what, and why, based on the code paths cited above.

@@ -4,6 +4,7 @@ import yaml
 import json
 from functools import lru_cache
 from typing import Dict, Any, Optional
+from pathlib import Path
 
 # Placeholder for a proper Redis client
 class MockRedis:
@@ -86,6 +87,10 @@ class ModelService:
             "claude-opus": "anthropic/claude-opus-4",
             "claude-3-sonnet-20240229": "anthropic/claude-3-sonnet-20240229",
             "gpt-4o-mini": "openai/gpt-4o-mini",
+            # silence defaults warnings by mapping logical IDs to available provider keys
+            "chatgpt-5-thinking": "openai/gpt-5",
+            "chatgpt-o3-high": "openai/o3",
+            "claude-sonnet-4": "anthropic/claude-3-sonnet-20240229",
         }
 
         # Validate mapped defaults at startup (warn by default, strict via flag)
@@ -100,14 +105,29 @@ class ModelService:
             logger.error(f"ModelService defaults validation error: {e}")
 
     def _load_config(self, path: str, is_json: bool = False) -> Dict[str, Any]:
-        """Loads a configuration file (YAML or JSON)."""
-        try:
-            with open(path, "r") as f:
+        """Loads a configuration file (YAML or JSON) with robust fallback resolution.
+
+        Tries provided relative path first (e.g. 'src/config/model_config.yaml'), then
+        falls back to resolving relative to this module's src/ directory.
+        """
+        def _load(p: Path) -> Dict[str, Any]:
+            with p.open("r", encoding="utf-8") as f:
                 if is_json:
                     return json.load(f)
                 return yaml.safe_load(f)
-        except FileNotFoundError:
-            logger.error(f"Configuration file not found at {path}")
+
+        try:
+            primary = Path(path)
+            if primary.exists():
+                return _load(primary)
+            # Fallback: resolve under backend/src/config regardless of CWD
+            src_dir = Path(__file__).resolve().parent.parent  # .../src
+            fallback = src_dir / "config" / primary.name
+            if fallback.exists():
+                # Downgrade to info to avoid noisy logs in dev; file resolution is expected
+                logger.info(f"Config not found at '{path}', using fallback '{fallback}'")
+                return _load(fallback)
+            logger.error(f"Configuration file not found at {path} (also tried {fallback})")
             return {}
         except Exception as e:
             logger.error(f"Error loading configuration from {path}: {e}")

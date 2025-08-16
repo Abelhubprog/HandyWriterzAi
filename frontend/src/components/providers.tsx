@@ -1,40 +1,44 @@
 'use client'
 
-// Temporarily disabled Dynamic Labs integration for debugging
-// import {
-//   DynamicContextProvider,
-// } from '@dynamic-labs/sdk-react-core'
-// import { EthereumWalletConnectors } from '@dynamic-labs/ethereum'
-// import { SolanaWalletConnectors } from '@dynamic-labs/solana'
-// import { useRouter } from 'next/navigation'
+import React from 'react'
+import { useRouter } from 'next/navigation'
+import { DynamicContextProvider } from '@dynamic-labs/sdk-react-core'
+import { useSyncBackendAuth } from '@/hooks/useSyncBackendAuth'
+
+// If you want wallet-specific connectors, you can add dynamic packages
+// without making them mandatory in dev (Dynamic auto-detects where possible).
+// Keeping it minimal to avoid bundling extra connectors unless needed.
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  // const router = useRouter()
+  const router = useRouter()
+  const envId = process.env.NEXT_PUBLIC_DYNAMIC_ENV_ID
+
+  if (!envId) {
+    // No Dynamic environment configured; return children unchanged
+    return <>{children}</>
+  }
+
   return (
-    <>
-      {children}
-      {/* Temporarily disabled for debugging
-      {process.env.NEXT_PUBLIC_DYNAMIC_ENV_ID ? (
-        <DynamicContextProvider
-          settings={{
-            environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENV_ID,
-            walletConnectors: [
-              EthereumWalletConnectors,
-              SolanaWalletConnectors,
-            ],
-            events: {
-              onAuthSuccess: () => {
-                router.push('/dashboard')
-              },
-            },
-          }}
-        >
-          {children}
-        </DynamicContextProvider>
-      ) : (
-        children
-      )}
-      */}
-    </>
+    <DynamicContextProvider
+      settings={{
+        environmentId: envId,
+        // Redirect to chat on successful auth for smoother UX
+        events: {
+          onAuthSuccess: () => {
+            try {
+              router.push('/chat')
+            } catch {}
+          }
+        }
+      }}
+    >
+      {/* Sync Dynamic wallet -> backend JWT for API calls */}
+      <AuthSync>{children}</AuthSync>
+    </DynamicContextProvider>
   )
+}
+
+function AuthSync({ children }: { children: React.ReactNode }) {
+  useSyncBackendAuth()
+  return <>{children}</>
 }
